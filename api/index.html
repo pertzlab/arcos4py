@@ -11,7 +11,7 @@
         <link rel="canonical" href="https://bgraedel.github.io/arcos4py/api/">
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.3.0, mkdocs-material-8.2.13">
+      <meta name="generator" content="mkdocs-1.3.0, mkdocs-material-8.2.15">
     
     
       
@@ -19,7 +19,7 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.e411adfe.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.c382b1dc.min.css">
       
         
         <link rel="stylesheet" href="../assets/stylesheets/palette.cc9b2e1e.min.css">
@@ -52,9 +52,6 @@
   
   
 
-
-  <script>function gtag(){dataLayer.push(arguments)}window.dataLayer=window.dataLayer||[],gtag("js",new Date),gtag("config","G-308769698"),document.addEventListener("DOMContentLoaded",function(){document.forms.search&&document.forms.search.query.addEventListener("blur",function(){this.value&&gtag("event","search",{search_term:this.value})}),"undefined"!=typeof location$&&location$.subscribe(function(e){gtag("config","G-308769698",{page_path:e.pathname})})})</script>
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-308769698"></script>
 
 
     
@@ -1406,12 +1403,13 @@ to prepare data and to detect and track collective events.</p>
 <span class="o">&gt;&gt;&gt;</span> <span class="n">ts</span> <span class="o">=</span> <span class="n">ARCOS</span><span class="p">(</span><span class="n">data</span><span class="p">,[</span><span class="s2">&quot;x&quot;</span><span class="p">],</span> <span class="s1">&#39;time&#39;</span><span class="p">,</span> <span class="s1">&#39;id&#39;</span><span class="p">,</span> <span class="s1">&#39;meas&#39;</span><span class="p">,</span> <span class="s1">&#39;clTrackID&#39;</span><span class="p">)</span>
 <span class="o">&gt;&gt;&gt;</span> <span class="n">ts</span><span class="o">.</span><span class="n">interpolate_measurements</span><span class="p">()</span>
 <span class="o">&gt;&gt;&gt;</span> <span class="n">ts</span><span class="o">.</span><span class="n">clip_meas</span><span class="p">(</span><span class="n">clip_low</span> <span class="o">=</span> <span class="mf">0.001</span><span class="p">,</span> <span class="n">clip_high</span><span class="o">=</span><span class="mf">0.999</span><span class="p">)</span>
-<span class="o">&gt;&gt;&gt;</span> <span class="n">ts</span><span class="o">.</span><span class="n">bin_measurements</span><span class="p">(</span><span class="n">smoothK</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">ts</span><span class="o">.</span><span class="n">bin_measurements</span><span class="p">(</span>
+        <span class="n">smoothK</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span>
         <span class="n">biasK</span> <span class="o">=</span> <span class="mi">51</span><span class="p">,</span>
         <span class="n">peakThr</span> <span class="o">=</span> <span class="mf">0.2</span><span class="p">,</span>
         <span class="n">binThr</span> <span class="o">=</span> <span class="mf">0.1</span><span class="p">,</span>
         <span class="n">polyDeg</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
-        <span class="n">biasMet</span> <span class="o">=</span> <span class="s2">&quot;runmed&quot;</span><span class="p">,)</span>
+        <span class="n">biasMet</span> <span class="o">=</span> <span class="s2">&quot;runmed&quot;</span><span class="p">)</span>
 <span class="o">&gt;&gt;&gt;</span> <span class="n">events_df</span> <span class="o">=</span> <span class="n">ts</span><span class="o">.</span><span class="n">trackCollev</span><span class="p">(</span><span class="n">eps</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> <span class="n">minClsz</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> <span class="n">nPrev</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span>
 </code></pre></div>
 
@@ -1529,7 +1527,7 @@ At least one dimension is required.</p></td>
 <span class="sd">            posCols (list): List ontaining position column names strings inside data e.g.</span>
 <span class="sd">                At least one dimension is required.</span>
 <span class="sd">            frame_column (str): Indicating the frame column in input_data.</span>
-<span class="sd">            id_column (str): Indicating the track id/id column in input_data.</span>
+<span class="sd">            id_column (str): Indicating the track id/object id column in input_data.</span>
 <span class="sd">            measurement_column (str): Indicating the measurement column in input_data.</span>
 <span class="sd">            clid_column (str): Indicating the column name containing the collective event ids.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -1732,7 +1730,7 @@ At least one dimension is required.</p></td>
       <tr>
         <td><code>id_column</code></td>
         <td><code>str</code></td>
-        <td><p>Indicating the track id/id column in input_data.</p></td>
+        <td><p>Indicating the track id/object id column in input_data.</p></td>
         <td><code>&#39;id&#39;</code></td>
       </tr>
       <tr>
@@ -1768,7 +1766,7 @@ At least one dimension is required.</p></td>
 <span class="sd">        posCols (list): List ontaining position column names strings inside data e.g.</span>
 <span class="sd">            At least one dimension is required.</span>
 <span class="sd">        frame_column (str): Indicating the frame column in input_data.</span>
-<span class="sd">        id_column (str): Indicating the track id/id column in input_data.</span>
+<span class="sd">        id_column (str): Indicating the track id/object id column in input_data.</span>
 <span class="sd">        measurement_column (str): Indicating the measurement column in input_data.</span>
 <span class="sd">        clid_column (str): Indicating the column name containing the collective event ids.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -2279,9 +2277,26 @@ algorithm looks back to connect collective events</p></td>
       <p>Module to plot different metrics generated by arcos4py functions.</p>
 
 <p><strong>Examples:</strong></p>
-    <div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span> <span class="nn">arcos4py.plotting</span> <span class="kn">import</span> <span class="n">plotOriginalDetrended</span>
+    <div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="c1"># Data Plots</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span> <span class="nn">arcos4py.plotting</span> <span class="kn">import</span> <span class="n">dataPlots</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">data_plots</span> <span class="o">=</span> <span class="n">dataPlots</span><span class="p">(</span><span class="n">df</span><span class="p">,</span><span class="s1">&#39;time&#39;</span><span class="p">,</span> <span class="s1">&#39;meas&#39;</span><span class="p">,</span> <span class="s1">&#39;track_id&#39;</span><span class="p">)</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">hist</span> <span class="o">=</span> <span class="n">data_plots</span><span class="o">.</span><span class="n">histogram</span><span class="p">()</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">dens</span> <span class="o">=</span> <span class="n">data_plots</span><span class="o">.</span><span class="n">density_plot</span><span class="p">()</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">xt_plot</span> <span class="o">=</span> <span class="n">data_plots</span><span class="o">.</span><span class="n">position_t_plot</span><span class="p">({</span><span class="s1">&#39;x&#39;</span><span class="p">},</span> <span class="n">n</span><span class="o">=</span><span class="mi">20</span><span class="p">)</span>
+</code></pre></div>
+    <div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="c1"># Detrended vs original plot</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span> <span class="nn">arcos4py.plotting</span> <span class="kn">import</span> <span class="n">plotOriginalDetrended</span>
 <span class="o">&gt;&gt;&gt;</span> <span class="n">plot</span> <span class="o">=</span> <span class="n">arcosPlots</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s1">&#39;time&#39;</span><span class="p">,</span> <span class="s1">&#39;meas&#39;</span><span class="p">,</span> <span class="s1">&#39;detrended&#39;</span><span class="p">,</span> <span class="s1">&#39;id&#39;</span><span class="p">)</span>
 <span class="o">&gt;&gt;&gt;</span> <span class="n">plot</span><span class="o">.</span><span class="n">plot_detrended</span><span class="p">()</span>
+</code></pre></div>
+    <div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="c1"># Stats Plot</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span> <span class="nn">arcos4py.plotting</span> <span class="kn">import</span> <span class="n">statsPlots</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">coll_dur_size_scatter</span> <span class="o">=</span> <span class="n">statsPlots</span><span class="p">(</span><span class="n">stats</span><span class="p">)</span><span class="o">.</span><span class="n">plot_events_duration</span><span class="p">(</span><span class="s1">&#39;total_size&#39;</span><span class="p">,</span><span class="s1">&#39;duration&#39;</span><span class="p">)</span>
+</code></pre></div>
+    <div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="c1"># Noodle Plot</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span> <span class="nn">arcos4py.plotting</span> <span class="kn">import</span> <span class="n">NoodlePlot</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">ndl</span> <span class="o">=</span> <span class="n">NoodlePlot</span><span class="p">(</span><span class="n">df</span><span class="p">,</span><span class="s2">&quot;collid&quot;</span><span class="p">,</span> <span class="s1">&#39;track_id&#39;</span><span class="p">,</span> <span class="s1">&#39;time&#39;</span><span class="p">,</span> <span class="s1">&#39;x&#39;</span><span class="p">,</span> <span class="s1">&#39;y&#39;</span><span class="p">)</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">ndl_plot</span> <span class="o">=</span> <span class="n">ndl</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="s1">&#39;x&#39;</span><span class="p">)</span>
 </code></pre></div>
 
 
@@ -2395,7 +2410,7 @@ or None if no z column.</p></td>
 <span class="sd">            posx (str): Name of the X coordinate column in df.</span>
 <span class="sd">            posy (str): Name of the Y coordinate column in df.</span>
 <span class="sd">            posz (str | None): Name of the Z coordinate column in df,</span>
-<span class="sd">                or &quot;None&quot; (str) if no z column.</span>
+<span class="sd">                or None if no z column.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">df</span> <span class="o">=</span> <span class="n">df</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">colev</span> <span class="o">=</span> <span class="n">colev</span>
@@ -2436,7 +2451,7 @@ or None if no z column.</p></td>
 <span class="sd">            and colors for each collective event.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="c1"># values need to be sorted to group with numpy</span>
-        <span class="n">df</span><span class="o">.</span><span class="n">sort_values</span><span class="p">([</span><span class="n">colev</span><span class="p">,</span> <span class="n">trackid</span><span class="p">],</span> <span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">sort_values</span><span class="p">([</span><span class="n">colev</span><span class="p">,</span> <span class="n">trackid</span><span class="p">])</span>
         <span class="k">if</span> <span class="n">posz</span><span class="p">:</span>
             <span class="n">array</span> <span class="o">=</span> <span class="n">df</span><span class="p">[[</span><span class="n">colev</span><span class="p">,</span> <span class="n">trackid</span><span class="p">,</span> <span class="n">frame</span><span class="p">,</span> <span class="n">posx</span><span class="p">,</span> <span class="n">posy</span><span class="p">,</span> <span class="n">posz</span><span class="p">]]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span>
         <span class="k">else</span><span class="p">:</span>
@@ -2580,7 +2595,7 @@ or None if no z column.</p></td>
         <td><code>posz</code></td>
         <td><code>str | None</code></td>
         <td><p>Name of the Z coordinate column in df,
-or "None" (str) if no z column.</p></td>
+or None if no z column.</p></td>
         <td><code>None</code></td>
       </tr>
   </tbody>
@@ -2607,7 +2622,7 @@ or "None" (str) if no z column.</p></td>
 <span class="sd">        posx (str): Name of the X coordinate column in df.</span>
 <span class="sd">        posy (str): Name of the Y coordinate column in df.</span>
 <span class="sd">        posz (str | None): Name of the Z coordinate column in df,</span>
-<span class="sd">            or &quot;None&quot; (str) if no z column.</span>
+<span class="sd">            or None if no z column.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">df</span> <span class="o">=</span> <span class="n">df</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">colev</span> <span class="o">=</span> <span class="n">colev</span>
@@ -4456,12 +4471,22 @@ or by fitting a polynomial of degree polyDeg {biasMet = "lm"}.</p>
 
 <span class="sd">        Arguments:</span>
 <span class="sd">            x (np.ndarray): Time series data for smoothing.</span>
-<span class="sd">            group_index (int): Index of measurement column in x.</span>
-<span class="sd">            meas_index (int): Index of id column in x.</span>
+<span class="sd">            group_index (int): Index of id column in x.</span>
+<span class="sd">            meas_index (int): Index of measurement column in x.</span>
 
 <span class="sd">        Returns (np.ndarray): Dataframe containing rescaled column.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">grouped_array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">x</span><span class="p">[:,</span> <span class="n">meas_index</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">x</span><span class="p">[:,</span> <span class="n">group_index</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">return_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)[</span><span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">:])</span>
+        <span class="c1">#################################################</span>
+        <span class="n">meas_array</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:,</span> <span class="n">meas_index</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;float64&#39;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">group_array</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:,</span> <span class="n">group_index</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;int64&#39;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">group_array</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:,</span> <span class="n">group_index</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;float64&#39;</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                <span class="n">group_array</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:,</span> <span class="n">group_index</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;U6&#39;</span><span class="p">)</span>
+
+        <span class="n">grouped_array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">meas_array</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">group_array</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">return_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)[</span><span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">:])</span>
         <span class="n">out</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_run_detrend</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">grouped_array</span><span class="p">]</span>
         <span class="n">out_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span> <span class="k">for</span> <span class="n">sublist</span> <span class="ow">in</span> <span class="n">out</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">sublist</span><span class="p">]</span>
         <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">out_list</span><span class="p">)</span>
@@ -4613,13 +4638,13 @@ outputs it into the resc_column.</p>
       <tr>
         <td><code>group_index</code></td>
         <td><code>int</code></td>
-        <td><p>Index of measurement column in x.</p></td>
+        <td><p>Index of id column in x.</p></td>
         <td><em>required</em></td>
       </tr>
       <tr>
         <td><code>meas_index</code></td>
         <td><code>int</code></td>
-        <td><p>Index of id column in x.</p></td>
+        <td><p>Index of measurement column in x.</p></td>
         <td><em>required</em></td>
       </tr>
   </tbody>
@@ -4635,12 +4660,22 @@ outputs it into the resc_column.</p>
 
 <span class="sd">    Arguments:</span>
 <span class="sd">        x (np.ndarray): Time series data for smoothing.</span>
-<span class="sd">        group_index (int): Index of measurement column in x.</span>
-<span class="sd">        meas_index (int): Index of id column in x.</span>
+<span class="sd">        group_index (int): Index of id column in x.</span>
+<span class="sd">        meas_index (int): Index of measurement column in x.</span>
 
 <span class="sd">    Returns (np.ndarray): Dataframe containing rescaled column.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">grouped_array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">x</span><span class="p">[:,</span> <span class="n">meas_index</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">x</span><span class="p">[:,</span> <span class="n">group_index</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">return_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)[</span><span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">:])</span>
+    <span class="c1">#################################################</span>
+    <span class="n">meas_array</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:,</span> <span class="n">meas_index</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;float64&#39;</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">group_array</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:,</span> <span class="n">group_index</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;int64&#39;</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">group_array</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:,</span> <span class="n">group_index</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;float64&#39;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="n">group_array</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:,</span> <span class="n">group_index</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;U6&#39;</span><span class="p">)</span>
+
+    <span class="n">grouped_array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">meas_array</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">group_array</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">return_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)[</span><span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">:])</span>
     <span class="n">out</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_run_detrend</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">grouped_array</span><span class="p">]</span>
     <span class="n">out_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span> <span class="k">for</span> <span class="n">sublist</span> <span class="ow">in</span> <span class="n">out</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">sublist</span><span class="p">]</span>
     <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">out_list</span><span class="p">)</span>
@@ -6278,7 +6313,7 @@ calcCollevStats        </code>
 <span class="sd">            data (np.ndarray): Containing a single collective event.</span>
 
 <span class="sd">        Returns:</span>
-<span class="sd">            np.ndarray: Array containing collid, duration, tot_size, min_size,</span>
+<span class="sd">            np.ndarray: Array containing the collective event id, duration, tot_size, min_size,</span>
 <span class="sd">                max_size, &quot;nd_frame, first_frame_centroid and last_frame_centroid</span>
 <span class="sd">                of the current collective event.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -6338,7 +6373,7 @@ calcCollevStats        </code>
 <span class="sd">                of all collective events.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">cols</span> <span class="o">=</span> <span class="p">[</span>
-            <span class="s1">&#39;collid&#39;</span><span class="p">,</span>
+            <span class="n">collev_id</span><span class="p">,</span>
             <span class="s2">&quot;duration&quot;</span><span class="p">,</span>
             <span class="s2">&quot;total_size&quot;</span><span class="p">,</span>
             <span class="s2">&quot;min_size&quot;</span><span class="p">,</span>
@@ -6351,11 +6386,20 @@ calcCollevStats        </code>
         <span class="n">subset</span> <span class="o">=</span> <span class="p">[</span><span class="n">frame_column</span><span class="p">,</span> <span class="n">obj_id_column</span><span class="p">,</span> <span class="n">collev_id</span><span class="p">]</span>
         <span class="k">if</span> <span class="n">posCol</span><span class="p">:</span>
             <span class="n">subset</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">posCol</span><span class="p">)</span>
-        <span class="n">data_np</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">subset</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="c1"># if object id cannot be converted to a float, generate unique labels with pd.factorize</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">data_np</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">subset</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="n">labels</span><span class="p">,</span> <span class="n">levels</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">factorize</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">obj_id_column</span><span class="p">])</span>
+            <span class="n">new_obj_id</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">obj_id_column</span><span class="si">}</span><span class="s1">_labels&#39;</span>
+            <span class="n">data</span><span class="p">[</span><span class="n">new_obj_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">labels</span>
+            <span class="n">subset</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">new_obj_id</span>
+            <span class="n">data_np</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">subset</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+
         <span class="n">data_np</span> <span class="o">=</span> <span class="n">data_np</span><span class="p">[</span><span class="o">~</span><span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">data_np</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)]</span>
         <span class="n">data_np_sorted</span> <span class="o">=</span> <span class="n">data_np</span><span class="p">[</span><span class="n">data_np</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">argsort</span><span class="p">()]</span>
         <span class="n">grouped_array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">data_np_sorted</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">data_np_sorted</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">return_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)[</span><span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">:])</span>
-        <span class="c1"># map dbscan to grouped_array</span>
+        <span class="c1"># map to grouped_array</span>
         <span class="n">out</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_calculate_duration_size_group</span><span class="p">,</span> <span class="n">grouped_array</span><span class="p">)</span>
         <span class="n">out_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">out</span><span class="p">]</span>
         <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">out_list</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="n">cols</span><span class="p">)</span>
@@ -6681,7 +6725,7 @@ start and end frame are not calcualted</p></td>
     <script id="__config" type="application/json">{"base": "..", "features": ["navigation.indexes", "navigation.instant", "navigation.tabs.sticky"], "search": "../assets/javascripts/workers/search.2a1c317c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.config.lang": "en", "search.config.pipeline": "trimmer, stopWordFilter", "search.config.separator": "[\\s\\-]+", "search.placeholder": "Search", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version.title": "Select version"}}</script>
     
     
-      <script src="../assets/javascripts/bundle.ed9748b7.min.js"></script>
+      <script src="../assets/javascripts/bundle.a6c66575.min.js"></script>
       
     
   </body>
