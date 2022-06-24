@@ -332,6 +332,33 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#014---2022-06-24" class="md-nav__link">
+    [0.1.4] - 2022-06-24
+  </a>
+  
+    <nav class="md-nav" aria-label="[0.1.4] - 2022-06-24">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fixed" class="md-nav__link">
+    Fixed
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed" class="md-nav__link">
+    Changed
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#013---2022-05-23" class="md-nav__link">
     [0.1.3] - 2022-05-23
   </a>
@@ -340,7 +367,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#fixed" class="md-nav__link">
+  <a href="#fixed_1" class="md-nav__link">
     Fixed
   </a>
   
@@ -374,14 +401,14 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#changed" class="md-nav__link">
+  <a href="#changed_1" class="md-nav__link">
     Changed
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#fixed_1" class="md-nav__link">
+  <a href="#fixed_2" class="md-nav__link">
     Fixed
   </a>
   
@@ -408,14 +435,14 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#changed_1" class="md-nav__link">
+  <a href="#changed_2" class="md-nav__link">
     Changed
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#fixed_2" class="md-nav__link">
+  <a href="#fixed_3" class="md-nav__link">
     Fixed
   </a>
   
@@ -492,15 +519,42 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#013---upcoming-release" class="md-nav__link">
-    [0.1.3] - Upcoming release
+  <a href="#014---2022-06-24" class="md-nav__link">
+    [0.1.4] - 2022-06-24
   </a>
   
-    <nav class="md-nav" aria-label="[0.1.3] - Upcoming release">
+    <nav class="md-nav" aria-label="[0.1.4] - 2022-06-24">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
   <a href="#fixed" class="md-nav__link">
+    Fixed
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed" class="md-nav__link">
+    Changed
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#013---2022-05-23" class="md-nav__link">
+    [0.1.3] - 2022-05-23
+  </a>
+  
+    <nav class="md-nav" aria-label="[0.1.3] - 2022-05-23">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fixed_1" class="md-nav__link">
     Fixed
   </a>
   
@@ -534,14 +588,14 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#changed" class="md-nav__link">
+  <a href="#changed_1" class="md-nav__link">
     Changed
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#fixed_1" class="md-nav__link">
+  <a href="#fixed_2" class="md-nav__link">
     Fixed
   </a>
   
@@ -568,14 +622,14 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#changed_1" class="md-nav__link">
+  <a href="#changed_2" class="md-nav__link">
     Changed
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#fixed_2" class="md-nav__link">
+  <a href="#fixed_3" class="md-nav__link">
     Fixed
   </a>
   
@@ -633,8 +687,19 @@
 
 <!-- BEGIN INCLUDE ../CHANGELOG.md   -->
 <h2 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h2>
-<h3 id="013---2022-05-23">[0.1.3] - 2022-05-23<a class="headerlink" href="#013---2022-05-23" title="Permanent link">&para;</a></h3>
+<h3 id="014---2022-06-24">[0.1.4] - 2022-06-24<a class="headerlink" href="#014---2022-06-24" title="Permanent link">&para;</a></h3>
 <h4 id="fixed">Fixed<a class="headerlink" href="#fixed" title="Permanent link">&para;</a></h4>
+<ul>
+<li>Fix for lm detrending</li>
+<li>Fix for none detrending</li>
+<li>Fix grouping failure when object id was a string in rescale data method in binarization class</li>
+</ul>
+<h4 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h4>
+<ul>
+<li>Binarization Thresholding value now sets everything to be active for &gt;=, as opposed to &gt; like it was before</li>
+</ul>
+<h3 id="013---2022-05-23">[0.1.3] - 2022-05-23<a class="headerlink" href="#013---2022-05-23" title="Permanent link">&para;</a></h3>
+<h4 id="fixed_1">Fixed<a class="headerlink" href="#fixed_1" title="Permanent link">&para;</a></h4>
 <ul>
 <li>Bug where if object id was a string, splitting arrays into groups would fail.</li>
 <li>Hardcoded collective id name in stats module</li>
@@ -650,7 +715,7 @@
 <ul>
 <li>NoodlePlot for collective events</li>
 </ul>
-<h4 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h4>
+<h4 id="changed_1">Changed<a class="headerlink" href="#changed_1" title="Permanent link">&para;</a></h4>
 <ul>
 <li>binarize_detrend: converted pandas operations to numpy for performance improvements</li>
 <li>detect_events: converted pandas operations to numpy for performance imporovements</li>
@@ -658,7 +723,7 @@
 <li>various small changes</li>
 <li>updated docstrings to match changes</li>
 </ul>
-<h4 id="fixed_1">Fixed<a class="headerlink" href="#fixed_1" title="Permanent link">&para;</a></h4>
+<h4 id="fixed_2">Fixed<a class="headerlink" href="#fixed_2" title="Permanent link">&para;</a></h4>
 <ul>
 <li>numpy warning caused by stats module</li>
 </ul>
@@ -673,13 +738,13 @@
 </ul>
 </li>
 </ul>
-<h4 id="changed_1">Changed<a class="headerlink" href="#changed_1" title="Permanent link">&para;</a></h4>
+<h4 id="changed_2">Changed<a class="headerlink" href="#changed_2" title="Permanent link">&para;</a></h4>
 <ul>
 <li>Interpolation class in tools now uses pandas.interpolate to interpolate missing values.</li>
 <li>Interpolation now interpolates all values in all columns of the dataframe.</li>
 <li>Improved usage section in the documentation.</li>
 </ul>
-<h4 id="fixed_2">Fixed<a class="headerlink" href="#fixed_2" title="Permanent link">&para;</a></h4>
+<h4 id="fixed_3">Fixed<a class="headerlink" href="#fixed_3" title="Permanent link">&para;</a></h4>
 <ul>
 <li>Bug in trackCollev class that would lead to an error message in some cases.</li>
 <li>Spelling in docstrings.</li>

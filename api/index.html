@@ -4031,15 +4031,24 @@ The final signal is binarised using the binThr threshold.</p>
         <span class="bp">self</span><span class="o">.</span><span class="n">binThr</span> <span class="o">=</span> <span class="n">binThr</span>
 
     <span class="k">def</span> <span class="nf">_rescale_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">group_index</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">meas_index</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">feat_range</span><span class="p">:</span> <span class="nb">tuple</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
-        <span class="n">grouped_array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">meas_index</span><span class="p">,</span> <span class="p">:],</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">group_index</span><span class="p">,</span> <span class="p">:],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">return_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)[</span><span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">:])</span>
-        <span class="n">out</span> <span class="o">=</span> <span class="p">[</span><span class="n">minmax_scale</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">feature_range</span><span class="o">=</span><span class="n">feat_range</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">grouped_array</span><span class="p">]</span>
+        <span class="n">meas_array</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:,</span> <span class="n">meas_index</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;float64&#39;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">group_array</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:,</span> <span class="n">group_index</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;int64&#39;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">group_array</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:,</span> <span class="n">group_index</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;float64&#39;</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                <span class="n">group_array</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:,</span> <span class="n">group_index</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;U6&#39;</span><span class="p">)</span>
+
+        <span class="n">grouped_array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">meas_array</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">group_array</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">return_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)[</span><span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">:])</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="p">[</span><span class="n">minmax_scale</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">feature_range</span><span class="o">=</span><span class="n">feat_range</span><span class="p">)</span> <span class="k">if</span> <span class="n">i</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">grouped_array</span><span class="p">]</span>
         <span class="n">rescaled</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span> <span class="k">for</span> <span class="n">sublist</span> <span class="ow">in</span> <span class="n">out</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">sublist</span><span class="p">]</span>
         <span class="c1"># rescaled = minmax_scale(x[:,1], feature_range=feat_range)</span>
         <span class="n">x</span><span class="p">[:,</span> <span class="n">meas_index</span><span class="p">]</span> <span class="o">=</span> <span class="n">rescaled</span>
         <span class="k">return</span> <span class="n">x</span>
 
     <span class="k">def</span> <span class="nf">_bin_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
-        <span class="nb">bin</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">binThr</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int_</span><span class="p">)</span>
+        <span class="nb">bin</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">binThr</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int_</span><span class="p">)</span>
         <span class="k">return</span> <span class="nb">bin</span>
 
     <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">colGroup</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">colMeas</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">colFrame</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
@@ -4065,8 +4074,13 @@ The final signal is binarised using the binThr threshold.</p>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">col_resc</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">colMeas</span><span class="si">}</span><span class="s2">.resc&quot;</span>
         <span class="n">col_bin</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">colMeas</span><span class="si">}</span><span class="s2">.bin&quot;</span>
-        <span class="n">cols</span> <span class="o">=</span> <span class="p">[</span><span class="n">colGroup</span><span class="p">,</span> <span class="n">colMeas</span><span class="p">]</span>
+        <span class="n">col_fact</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">colGroup</span><span class="si">}</span><span class="s1">_factorized&#39;</span>
+        <span class="n">cols</span> <span class="o">=</span> <span class="p">[</span><span class="n">col_fact</span><span class="p">,</span> <span class="n">colMeas</span><span class="p">]</span>
         <span class="n">x</span><span class="o">.</span><span class="n">sort_values</span><span class="p">([</span><span class="n">colGroup</span><span class="p">,</span> <span class="n">colFrame</span><span class="p">],</span> <span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="c1"># factorize column in order to prevent numpy grouping error in detrending</span>
+        <span class="n">value</span><span class="p">,</span> <span class="n">label</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">colGroup</span><span class="p">]</span><span class="o">.</span><span class="n">factorize</span><span class="p">()</span>
+        <span class="n">x</span><span class="p">[</span><span class="n">col_fact</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+        <span class="c1"># convert to numpy</span>
         <span class="n">data_np</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">cols</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span>
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">biasMet</span> <span class="o">==</span> <span class="s2">&quot;none&quot;</span><span class="p">:</span>
@@ -4077,6 +4091,7 @@ The final signal is binarised using the binThr threshold.</p>
             <span class="n">detrended_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">detrend</span><span class="p">(</span><span class="n">data_np</span><span class="p">,</span> <span class="n">group_index</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">meas_index</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
             <span class="n">binarized_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_bin_data</span><span class="p">(</span><span class="n">detrended_data</span><span class="p">)</span>
 
+        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">drop</span><span class="p">([</span><span class="n">col_fact</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
         <span class="n">x</span><span class="p">[</span><span class="n">col_resc</span><span class="p">]</span> <span class="o">=</span> <span class="n">detrended_data</span>
         <span class="n">x</span><span class="p">[</span><span class="n">col_bin</span><span class="p">]</span> <span class="o">=</span> <span class="n">binarized_data</span>
         <span class="k">return</span> <span class="n">x</span>
@@ -4290,8 +4305,13 @@ Followed by binarization of the data.</p>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">col_resc</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">colMeas</span><span class="si">}</span><span class="s2">.resc&quot;</span>
     <span class="n">col_bin</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">colMeas</span><span class="si">}</span><span class="s2">.bin&quot;</span>
-    <span class="n">cols</span> <span class="o">=</span> <span class="p">[</span><span class="n">colGroup</span><span class="p">,</span> <span class="n">colMeas</span><span class="p">]</span>
+    <span class="n">col_fact</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">colGroup</span><span class="si">}</span><span class="s1">_factorized&#39;</span>
+    <span class="n">cols</span> <span class="o">=</span> <span class="p">[</span><span class="n">col_fact</span><span class="p">,</span> <span class="n">colMeas</span><span class="p">]</span>
     <span class="n">x</span><span class="o">.</span><span class="n">sort_values</span><span class="p">([</span><span class="n">colGroup</span><span class="p">,</span> <span class="n">colFrame</span><span class="p">],</span> <span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="c1"># factorize column in order to prevent numpy grouping error in detrending</span>
+    <span class="n">value</span><span class="p">,</span> <span class="n">label</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">colGroup</span><span class="p">]</span><span class="o">.</span><span class="n">factorize</span><span class="p">()</span>
+    <span class="n">x</span><span class="p">[</span><span class="n">col_fact</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+    <span class="c1"># convert to numpy</span>
     <span class="n">data_np</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">cols</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span>
 
     <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">biasMet</span> <span class="o">==</span> <span class="s2">&quot;none&quot;</span><span class="p">:</span>
@@ -4302,6 +4322,7 @@ Followed by binarization of the data.</p>
         <span class="n">detrended_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">detrend</span><span class="p">(</span><span class="n">data_np</span><span class="p">,</span> <span class="n">group_index</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">meas_index</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
         <span class="n">binarized_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_bin_data</span><span class="p">(</span><span class="n">detrended_data</span><span class="p">)</span>
 
+    <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">drop</span><span class="p">([</span><span class="n">col_fact</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
     <span class="n">x</span><span class="p">[</span><span class="n">col_resc</span><span class="p">]</span> <span class="o">=</span> <span class="n">detrended_data</span>
     <span class="n">x</span><span class="p">[</span><span class="n">col_bin</span><span class="p">]</span> <span class="o">=</span> <span class="n">binarized_data</span>
     <span class="k">return</span> <span class="n">x</span>
@@ -4433,9 +4454,9 @@ or by fitting a polynomial of degree polyDeg {biasMet = "lm"}.</p>
         <span class="k">return</span> <span class="n">local_smoothing</span>
 
     <span class="k">def</span> <span class="nf">_detrend_lm</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">polynomial_degree</span><span class="p">):</span>
-        <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">size</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">size</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
         <span class="n">transformer</span> <span class="o">=</span> <span class="n">PolynomialFeatures</span><span class="p">(</span><span class="n">degree</span><span class="o">=</span><span class="n">polynomial_degree</span><span class="p">,</span> <span class="n">include_bias</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-        <span class="n">data_</span> <span class="o">=</span> <span class="n">transformer</span><span class="o">.</span><span class="n">fit_transform</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">data_</span> <span class="o">=</span> <span class="n">transformer</span><span class="o">.</span><span class="n">fit_transform</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
         <span class="n">model</span> <span class="o">=</span> <span class="n">LinearRegression</span><span class="p">()</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X</span><span class="o">=</span><span class="n">data_</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="n">x</span><span class="p">)</span>
         <span class="n">predicted_value</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">data_</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">predicted_value</span>
@@ -4459,7 +4480,7 @@ or by fitting a polynomial of degree polyDeg {biasMet = "lm"}.</p>
                     <span class="n">local_smoothed</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">divide</span><span class="p">(</span><span class="n">local_smoothed</span><span class="p">,</span> <span class="n">local_smoothed</span><span class="o">.</span><span class="n">max</span><span class="p">())</span>
                 <span class="n">local_smoothed</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan_to_num</span><span class="p">(</span><span class="n">local_smoothed</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">local_smoothed</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="n">local_smoothed</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([])</span>
 
         <span class="k">return</span> <span class="n">local_smoothed</span>
 
@@ -5436,10 +5457,13 @@ Must at least contain one</p></td>
 <span class="sd">        Returns:</span>
 <span class="sd">            list[np.ndarray]: list with added collective id column detected by DBSCAN.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">db_array</span> <span class="o">=</span> <span class="n">DBSCAN</span><span class="p">(</span><span class="n">eps</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">eps</span><span class="p">,</span> <span class="n">min_samples</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">minClSz</span><span class="p">,</span> <span class="n">algorithm</span><span class="o">=</span><span class="s2">&quot;kd_tree&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">x</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">:])</span>
-        <span class="n">cluster_labels</span> <span class="o">=</span> <span class="n">db_array</span><span class="o">.</span><span class="n">labels_</span>
-        <span class="n">cluster_list</span> <span class="o">=</span> <span class="p">[</span><span class="nb">id</span> <span class="o">+</span> <span class="mi">1</span> <span class="k">if</span> <span class="nb">id</span> <span class="o">&gt;</span> <span class="o">-</span><span class="mi">1</span> <span class="k">else</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span> <span class="k">for</span> <span class="nb">id</span> <span class="ow">in</span> <span class="n">cluster_labels</span><span class="p">]</span>
-        <span class="k">return</span> <span class="n">cluster_list</span>
+        <span class="k">if</span> <span class="n">x</span><span class="o">.</span><span class="n">size</span><span class="p">:</span>
+            <span class="n">db_array</span> <span class="o">=</span> <span class="n">DBSCAN</span><span class="p">(</span><span class="n">eps</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">eps</span><span class="p">,</span> <span class="n">min_samples</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">minClSz</span><span class="p">,</span> <span class="n">algorithm</span><span class="o">=</span><span class="s2">&quot;kd_tree&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">x</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">:])</span>
+            <span class="n">cluster_labels</span> <span class="o">=</span> <span class="n">db_array</span><span class="o">.</span><span class="n">labels_</span>
+            <span class="n">cluster_list</span> <span class="o">=</span> <span class="p">[</span><span class="nb">id</span> <span class="o">+</span> <span class="mi">1</span> <span class="k">if</span> <span class="nb">id</span> <span class="o">&gt;</span> <span class="o">-</span><span class="mi">1</span> <span class="k">else</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span> <span class="k">for</span> <span class="nb">id</span> <span class="ow">in</span> <span class="n">cluster_labels</span><span class="p">]</span>
+            <span class="k">return</span> <span class="n">cluster_list</span>
+
+        <span class="k">return</span> <span class="p">[]</span>
 
     <span class="k">def</span> <span class="nf">_run_dbscan</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">frame</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">clid_frame</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">id_column</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="kc">None</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
         <span class="sd">&quot;&quot;&quot;Apply dbscan method to every group i.e. frame.</span>
@@ -5578,8 +5602,8 @@ Must at least contain one</p></td>
 <span class="sd">        5. Tracks collective events i.e. links cluster ids across frames.</span>
 <span class="sd">        6. Creates final DataFrame.</span>
 
-<span class="sd">        Returns (Dataframe):</span>
-<span class="sd">            Dataframe with tracked collective events is returned.</span>
+<span class="sd">        Returns:</span>
+<span class="sd">            DataFrame: Dataframe with tracked collective events is returned.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">filtered_cols</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_select_necessary_columns</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">input_data</span><span class="p">,</span>
@@ -5793,9 +5817,22 @@ Must at least contain one</p></td>
 <li>Tracks collective events i.e. links cluster ids across frames.</li>
 <li>Creates final DataFrame.</li>
 </ol>
-<p>Returns (Dataframe):
-    Dataframe with tracked collective events is returned.</p>
 
+<p><strong>Returns:</strong></p>
+<table>
+  <thead>
+    <tr>
+      <th>Type</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>DataFrame</code></td>
+      <td><p>Dataframe with tracked collective events is returned.</p></td>
+    </tr>
+  </tbody>
+</table>
         <details class="quote">
           <summary>Source code in <code>arcos4py/tools/detect_events.py</code></summary>
           <div class="highlight"><pre><span></span><code><span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
@@ -5808,8 +5845,8 @@ Must at least contain one</p></td>
 <span class="sd">    5. Tracks collective events i.e. links cluster ids across frames.</span>
 <span class="sd">    6. Creates final DataFrame.</span>
 
-<span class="sd">    Returns (Dataframe):</span>
-<span class="sd">        Dataframe with tracked collective events is returned.</span>
+<span class="sd">    Returns:</span>
+<span class="sd">        DataFrame: Dataframe with tracked collective events is returned.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">filtered_cols</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_select_necessary_columns</span><span class="p">(</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">input_data</span><span class="p">,</span>
