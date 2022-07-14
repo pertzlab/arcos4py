@@ -6,7 +6,7 @@ To install arcos4py, run this command in your
 terminal:
 
 ``` console
-$ pip install arcos4py
+pip install arcos4py
 ```
 
 This is the preferred method to install arcos4py, as it will always install the most recent stable release.
@@ -22,19 +22,19 @@ the [Github repo][].
 You can either clone the public repository:
 
 ``` console
-$ git clone https://github.com/bgraedel/arcos4py
+git clone https://github.com/bgraedel/arcos4py
 ```
 
 Or download the [tarball][]:
 
 ``` console
-$ curl -OJL https://github.com/bgraedel/arcos4py/tarball/master
+curl -OJL https://github.com/bgraedel/arcos4py/tarball/master
 ```
 
 Once you have a copy of the source, you can install it with:
 
 ``` console
-$ pip install .
+pip install *tar.gz
 ```
 
   [pip]: https://pip.pypa.io

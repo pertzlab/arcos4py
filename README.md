@@ -10,9 +10,6 @@
 
 Arcos4py is a python package to detect collective Spatio-temporal phenomena.
 
-The package is currently in the development phase. Additional features, such as more plotting functionality will come with future updates.
-This also means that functionality might change in the feature.
-
 * Documentation: <https://bgraedel.github.io/arcos4py>
 * GitHub: <https://github.com/bgraedel/arcos4py>
 * PyPI: <https://pypi.org/project/arcos4py/>
@@ -29,7 +26,7 @@ Despite its focus on cell signaling, the framework can also be applied to other 
 
 ### Todo's
 - Add additional tests for binarization and de-biasing modules.
-- Add example processing to documentation with images of collective events.
+- Add local indicators of spatial autocorrelation (LISA) as a binarization method option.
 
 Data Format
 -----------

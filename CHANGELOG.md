@@ -1,9 +1,9 @@
 # Changelog
-## [0.1.4] - Upcoming Release
+## [0.1.4] - 2022-06-24
 ### Fixed
 - Fix for lm detrending
 - Fix for none detrending
-- Fix grouping failuer when object id was a string in rescale data method in binarization class
+- Fix grouping failure when object id was a string in rescale data method in binarization class
 
 ### Changed
 - Binarization Thresholding value now sets everything to be active for >=, as opposed to > like it was before

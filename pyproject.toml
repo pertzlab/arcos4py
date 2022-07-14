@@ -1,7 +1,7 @@
 [tool]
 [tool.poetry]
 name = "arcos4py"
-version = "0.1.3"
+version = "0.1.4"
 homepage = "https://github.com/bgraedel/arcos4py"
 description = "A python package to detect collective spatio-temporal phenomena."
 authors = ["Benjamin Graedel <benjamin.graedel@unibe.ch>"]
