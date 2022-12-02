@@ -4,15 +4,17 @@ import pandas as pd
 import numpy as np
 from typing import Union, Tuple
 from scipy.ndimage import gaussian_filter, median_filter
+from skimage.util import view_as_blocks
 
 
 
-def image_to_dataframe(image: np.ndarray) -> pd.DataFrame:
+def image_to_dataframe(image: np.ndarray, thresh: int = 0) -> pd.DataFrame:
     """Converts a 2d image series to a dataframe with columns for x, y, and intensity.
     to be used with ARCOS.
 
     Arguments:
         image (np.ndarray): Image to convert.
+        thresh (int): Threshold to use to remove background.
 
     Returns (pd.DataFrame): Dataframe with image data.
     """
@@ -25,6 +27,7 @@ def image_to_dataframe(image: np.ndarray) -> pd.DataFrame:
         df['t'] = idx        
     df_all = pd.concat(df_all)
     df_all['track_id'] = np.tile(np.arange(len(df_all[df_all.t==0])), len(df_all.t.unique()))
+    df_all = df_all[df_all['value'] > 0]
     return df_all
 
 def remove_image_background(image: np.ndarray, filter_type: str = 'gaussian', size: Union[int, Tuple] = 10  ) -> np.ndarray:
@@ -57,19 +60,38 @@ def remove_image_background(image: np.ndarray, filter_type: str = 'gaussian', si
     elif filter_type == 'gaussian':
         filtered = gaussian_filter(orig_image, sigma=size)
 
-    corr = orig_image - filtered
+    corr = np.subtract(orig_image, filtered, dtype=np.float32)
     corr = corr[s_2:-s_2]
     return corr
 
-def remove_edge_artefacts(image: np.ndarray, mask: np.ndarray) -> np.ndarray:
-    """Removes edge artefacts from an image.
+
+def blockwise_median(a, blockshape):
+    """Calculates the blockwise median of an array.
 
     Arguments:
-        image (np.ndarray): Image to remove artefacts from.
-        mask (np.ndarray): Mask to use to remove artefacts.
+        a (np.ndarray): Array to calculate blockwise median of.
+        blockshape (Tuple): Shape of blocks to use.
 
-    Returns (np.ndarray): Image with artefacts removed.
+    Returns (np.ndarray): Blockwise median of array.
     """
-    image = image.copy()
-    image[~mask] = 0
-    return image
+    assert a.ndim == len(blockshape), \
+        "blocks must have same dimensionality as the input image"
+    assert not (np.array(a.shape) % blockshape).any(), \
+        "blockshape must divide cleanly into the input image shape"
+
+    block_view = view_as_blocks(a, blockshape)
+    assert block_view.shape[a.ndim:] == blockshape
+    block_axes = [*range(a.ndim, 2*a.ndim)]
+    return np.median(block_view, axis=block_axes)
+
+
+def mask_image(image: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    """Masks an image with a mask.
+
+    Arguments:
+        image (np.ndarray): Image to mask.
+        mask (np.ndarray): Mask to use.
+
+    Returns (np.ndarray): Masked image.
+    """
+    return np.where(mask, image, 0)
