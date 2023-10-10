@@ -241,6 +241,8 @@ class statsPlots:
         Returns:
             Axes (matplotlib.axes.Axes): Matplotlib Axes object of scatterplot
         """
+        if self.data.empty:
+            raise ValueError("Dataframe is empty")
         plot = sns.scatterplot(x=self.data[total_size], y=self.data[duration], s=point_size, *args, **kwargs)
         return plot
 
@@ -319,7 +321,10 @@ class NoodlePlot:
             grouped_array (list[np.ndarray]): List of collective events data
             colors (np.ndarray): colors for each collective event.
         """
-        # values need to be sorted to group with numpy
+        df = df.copy()
+        # factorize trackid to get unique values and make sure they are nummeric
+        df[trackid] = df[trackid].factorize()[0]
+        # sort by collective event and trackid
         df = df.sort_values([colev, trackid])
         if posz:
             array = df[[colev, trackid, frame, posx, posy, posz]].to_numpy()
@@ -348,6 +353,8 @@ class NoodlePlot:
         ax.set_xlabel("Time Point")
         ax.set_ylabel("Position")
         for dat in grouped_data:
+            if dat.size == 0:
+                continue
             ax.plot(
                 dat[:, 2],
                 dat[:, self.projection_index],
@@ -369,6 +376,8 @@ class NoodlePlot:
             fig (matplotlib.figure.Figure): Matplotlib figure object for the noodle plot.
             axes (matplotlib.axes.Axes): Matplotlib axes for the nooble plot.
         """
+        if self.df.empty:
+            raise ValueError("Dataframe is empty")
         if projection_axis not in [self.posx, self.posy, self.posz]:
             raise ValueError(f"projection_axis has to be one of {[self.posx, self.posy, self.posz]}")
         if projection_axis == self.posx:

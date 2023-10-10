@@ -46,6 +46,8 @@ def calculate_statistics_per_frame(
         - centroid_speed: The speed of the centroid, calculated as the norm of the change
             in x and y divided by the duration (calculated if pos_columns is provided).
     """
+    if data.empty:
+        raise ValueError("The input data is empty.")
     necessary_columns = [frame_column, collid_column]
     if pos_columns:
         necessary_columns.extend(pos_columns)
@@ -149,6 +151,8 @@ def calculate_statistics(
             variability in the size of the event over time (calculated if obj_id_column is provided).
     """
     # Error handling: Check if necessary columns are present in the input data
+    if data.empty:
+        raise ValueError("The input data is empty.")
     necessary_columns = [frame_column, collid_column]
     if obj_id_column:
         necessary_columns.append(obj_id_column)
