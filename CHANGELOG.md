@@ -1,5 +1,13 @@
 # Changelog
-## [0.2.2] - Upcoming
+## [0.2.3] - 2023-10-10
+### Fixed
+- Noodle plot would produce an axis error if no collective events were detected
+- Noodle plot would produce false results if object id was not an integer
+
+### Changed
+- More input data validation for stats functions
+
+## [0.2.2] - 2023-09-22
 ### Fixed
 - Bug in eps estimation for DBSCAN clustering
 

@@ -201,7 +201,7 @@ class plotOriginalDetrended:
 
         fig, axes2d = plt.subplots(nrows=nrows, ncols=ncols, figsize=plotsize, sharey=True)
 
-        for (key, ax) in zip(grouped.groups.keys(), axes2d.flatten()):
+        for key, ax in zip(grouped.groups.keys(), axes2d.flatten()):
             grouped.get_group(key).plot(x=self.frame, y=[self.measurement, self.detrended], ax=ax)
             ax.get_legend().remove()
 
