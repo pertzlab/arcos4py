@@ -5,6 +5,7 @@ Example:
     >>> binarizer = binData(biasMet="lm", polyDeg=1)
     >>> data_rescaled = binarizer.run(data, colMeas="ERK_KTR", colGroup="trackID")
 """
+
 from __future__ import annotations
 
 from warnings import warn

@@ -1,4 +1,5 @@
 """Tools for resampling data."""
+
 from __future__ import annotations
 
 import warnings

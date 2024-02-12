@@ -17,6 +17,7 @@ Example:
             biasMet = "runmed")
     >>> events_df = ts.trackCollev(eps = 1, minClsz = 1, nPrev = 1)
 """
+
 from __future__ import annotations
 
 from typing import Union

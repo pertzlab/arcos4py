@@ -1,4 +1,14 @@
 # Changelog
+
+## [0.2.4] - 2024-02-13
+### Fixed
+- Hard-coded column names in stats functions
+- False example for a plot in the documentation
+
+### Changed
+- Updated plotOriginalDetrended to include separate methods for plotting detrended and original data
+- Updated plotOriginalDetrended to include markers for binarized regions
+
 ## [0.2.3] - 2023-10-10
 ### Fixed
 - Noodle plot would produce an axis error if no collective events were detected

@@ -200,8 +200,12 @@ def calculate_statistics(
             centroid_data = group_data.groupby(frame_column)[pos_columns].mean().reset_index()
 
             for col in pos_columns:
-                collid_stats[f'first_frame_centroid_{col}'] = centroid_data.query(f'frame == {tp_1}')[col].to_numpy()[0]
-                collid_stats[f'last_frame_centroid_{col}'] = centroid_data.query(f'frame == {tp_2}')[col].to_numpy()[0]
+                collid_stats[f'first_frame_centroid_{col}'] = centroid_data.query(f'{frame_column} == {tp_1}')[
+                    col
+                ].to_numpy()[0]
+                collid_stats[f'last_frame_centroid_{col}'] = centroid_data.query(f'{frame_column} == {tp_2}')[
+                    col
+                ].to_numpy()[0]
 
             # Calculate speed and direction
             speed = np.linalg.norm(
@@ -244,7 +248,7 @@ def calculate_statistics(
             # Loop over first and last frames separately to calculate the spatial extent and convex hull area
             for frame_name, frame_number in zip(['first_frame', 'last_frame'], [tp_1, tp_2]):
                 # Get data for either the first or last frame
-                frame_data = group_data.query(f'frame == {frame_number}')
+                frame_data = group_data.query(f'{frame_column} == {frame_number}')
 
                 # Calculate spatial extent
                 spatial_extent = pdist(frame_data[pos_columns].values).max() if len(frame_data) > 1 else 0

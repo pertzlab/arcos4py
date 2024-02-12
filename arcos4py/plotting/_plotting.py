@@ -10,6 +10,7 @@ Examples:
 
     >>> # Detrended vs original plot
     >>> from arcos4py.plotting import plotOriginalDetrended
+    >>> arcosPlots = plotOriginalDetrended(data, 'time', 'meas', 'detrended', 'id')
     >>> plot = arcosPlots(data, 'time', 'meas', 'detrended', 'id')
     >>> plot.plot_detrended()
 
@@ -25,9 +26,8 @@ Examples:
 
 from __future__ import annotations
 
-from typing import Union
+from typing import Any, Union
 
-import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -81,7 +81,7 @@ class dataPlots:
         self.frame = frame
         self.measurement = measurement
 
-    def position_t_plot(self, posCol: set[str] = {'x'}, n: int = 20) -> Union[plt.Axes, plt.Figure]:
+    def position_t_plot(self, posCol: set[str] = {'x'}, n: int = 20) -> Union[plt.Figure, Any]:
         """Plots X and Y over T to visualize tracklength.
 
         Arguments:
@@ -95,7 +95,7 @@ class dataPlots:
         sample = pd.Series(self.data[self.id].unique()).sample(n)
         pd_from_r_df = self.data.loc[self.data[self.id].isin(sample)]
         fig, axes = plt.subplots(1, len(posCol), figsize=(6, 3))
-        for label, df in pd_from_r_df.groupby(self.id):
+        for _, df in pd_from_r_df.groupby(self.id):
             for index, value in enumerate(posCol):
                 if len(posCol) > 1:
                     df.plot(x=self.frame, y=value, ax=axes[index], legend=None)
@@ -130,7 +130,7 @@ class dataPlots:
         plt.ylabel('Density')
         return plot
 
-    def histogram(self, bins: str = 'auto', *args, **kwargs) -> plt.Axes.subplot:
+    def histogram(self, bins: str = 'auto', *args, **kwargs) -> plt.Axes:
         """Histogram of tracklenght.
 
         Uses seaborn histplot function to plot tracklenght histogram.
@@ -154,61 +154,153 @@ class dataPlots:
 
 
 class plotOriginalDetrended:
-    """Plot different detrended vs original data.
+    """Plot original and detrended data.
 
     Attributes:
-        data (Dataframe): containing ARCOS data.
+        data (DataFrame): containing ARCOS data.
         frame (str): name of frame column in data.
         measurement (str): name of measurement column in data.
-        detrended (str): name of detrended column with detrended data.
+        detrended (str): name of detrended column in data.
         id (str): name of track id column.
+        seed (int): seed for random number generator.
+
+    Methods:
+        plot_detrended: plot detrended data.
+        plot_original: plot original data.
+        plot_original_and_detrended: plot original and detrended data.
     """
 
-    def __init__(self, data: pd.DataFrame, frame: str, measurement: str, detrended: str, id: str):
-        """Plot detrended vs original data.
-
-        Arguments:
-            data (Dataframe): containing ARCOS data.
-            frame (str): name of frame column in data.
-            measurement (str): name of measurement column in data.
-            detrended (str): name of detrended column with detrended data.
-            id (str): name of track id column.
-        """
+    def __init__(self, data: pd.DataFrame, frame: str, measurement: str, detrended: str, id: str, seed: int = 42):
+        """Constructs class with given parameters."""
         self.data = data
+        self.frame = frame
         self.measurement = measurement
         self.detrended = detrended
         self.id = id
-        self.frame = frame
+        self.seed = seed
 
-    def plot_detrended(self, n_samples: int = 25, subplots: tuple = (5, 5), plotsize: tuple = (20, 10)):
-        """Method to plot detrended vs original data.
+    def _prepare_data(self, n_samples: int):
+        rng_gen = np.random.default_rng(seed=self.seed)
+        vals = rng_gen.choice(self.data[self.id].unique(), n_samples, replace=False)  # noqa: F841
+        filtered_data = self.data.query(f"{self.id} in @vals")
+        return filtered_data.groupby(self.id)
 
-        Arguments:
-            n_samples (int): Number of tracks to plot.
-            subplots (tuple): Number of subplots, should be approx. one per sample.
-            plotsize (tuple): Size of generated plot.
-
-        Returns:
-            Fig (matplotlib.axes.Axes): Matplotlib axes2d of detrended vs original data.
-            Axes (matplotlib.axes.Axes): Matplotlib figure of detrended vs original data.
-        """
-        vals = np.random.choice(self.data[self.id].unique(), n_samples, replace=False)
-        self.data = self.data.set_index(self.id).loc[vals].reset_index()
-        grouped = self.data.groupby(self.id)
-
-        ncols = subplots[0]
-        nrows = subplots[1]
-
+    def _plot_data(self, grouped, ncols, nrows, plotsize, plot_columns, labels, add_binary_segments=False):
         fig, axes2d = plt.subplots(nrows=nrows, ncols=ncols, figsize=plotsize, sharey=True)
+        max_val = 0
+        for (name, group), ax in zip(grouped, axes2d.flatten()):
+            for column, label in zip(plot_columns, labels):
+                ax.plot(group[self.frame], group[column], label=label)
+                max_val = group[column].max() if group[column].max() > max_val else max_val
+            ax.set_title(f"Track {name}")
 
-        for key, ax in zip(grouped.groups.keys(), axes2d.flatten()):
-            grouped.get_group(key).plot(x=self.frame, y=[self.measurement, self.detrended], ax=ax)
-            ax.get_legend().remove()
+        if add_binary_segments:
+            for (name, group), ax in zip(grouped, axes2d.flatten()):
+                self._add_binary_segments(group, ax, max_val)
 
+        fig.supxlabel('Time Point')
+        fig.supylabel('Measurement')
         handles, labels = ax.get_legend_handles_labels()
-        fig.legend(handles, labels, loc="lower right")
+        fig.tight_layout()
+        fig.legend(handles, labels, loc='upper right')
 
         return fig, axes2d
+
+    def _add_binary_segments(self, group, ax, max_val):
+        x_val = group[group[f"{self.measurement}.bin"] != 0][self.frame]
+        y_val = np.repeat(max_val, x_val.size)
+        indices = np.where(np.diff(x_val) != 1)[0] + 1
+        x_split = np.split(x_val, indices)
+        y_split = np.split(y_val, indices)
+        for idx, (x_val, y_val) in enumerate(zip(x_split, y_split)):
+            if idx == 0:
+                ax.plot(x_val, y_val, color="red", lw=2, label="bin")
+            else:
+                ax.plot(x_val, y_val, color="red", lw=2)
+
+    def plot_detrended(
+        self,
+        n_samples: int = 25,
+        subplots: tuple = (5, 5),
+        plotsize: tuple = (20, 10),
+        add_binary_segments: bool = False,
+    ) -> tuple[plt.Figure, Any]:
+        """Plots detrended data.
+
+        Arguments:
+            n_samples (int): number of samples to plot.
+            subplots (tuple): number of subplots in x and y direction.
+            plotsize (tuple): size of the plot.
+            add_binary_segments (bool): if True, binary segments are added to the plot.
+
+        Returns:
+            fig (matplotlib.figure.Figure): Matplotlib figure object of plot.
+            axes (matplotlib.axes.Axes): Matplotlib axes of plot.
+        """
+        grouped = self._prepare_data(n_samples)
+        return self._plot_data(
+            grouped, subplots[0], subplots[1], plotsize, [self.detrended], ["detrended"], add_binary_segments
+        )
+
+    def plot_original(
+        self,
+        n_samples: int = 25,
+        subplots: tuple = (5, 5),
+        plotsize: tuple = (20, 10),
+        add_binary_segments: bool = False,
+    ) -> tuple[plt.Figure, Any]:
+        """Plots original data.
+
+        Arguments:
+            n_samples (int): number of samples to plot.
+            subplots (tuple): number of subplots in x and y direction.
+            plotsize (tuple): size of the plot.
+            add_binary_segments (bool): if True, binary segments are added to the plot.
+
+        Returns:
+            fig (matplotlib.figure.Figure): Matplotlib figure object of plot.
+            axes (matplotlib.axes.Axes): Matplotlib axes of plot.
+        """
+        grouped = self._prepare_data(n_samples)
+        return self._plot_data(
+            grouped,
+            subplots[0],
+            subplots[1],
+            plotsize,
+            [self.measurement],
+            ["original"],
+            add_binary_segments,
+        )
+
+    def plot_original_and_detrended(
+        self,
+        n_samples: int = 25,
+        subplots: tuple = (5, 5),
+        plotsize: tuple = (20, 10),
+        add_binary_segments: bool = False,
+    ) -> tuple[plt.Figure, Any]:
+        """Plots original and detrended data.
+
+        Arguments:
+            n_samples (int): number of samples to plot.
+            subplots (tuple): number of subplots in x and y direction.
+            plotsize (tuple): size of the plot.
+            add_binary_segments (bool): if True, binary segments are added to the plot.
+
+        Returns:
+            fig (matplotlib.figure.Figure): Matplotlib figure object of plot.
+            axes (matplotlib.axes.Axes): Matplotlib axes of plot.
+        """
+        grouped = self._prepare_data(n_samples)
+        return self._plot_data(
+            grouped,
+            subplots[0],
+            subplots[1],
+            plotsize,
+            [self.measurement, self.detrended],
+            ["original", "detrended"],
+            add_binary_segments,
+        )
 
 
 class statsPlots:
@@ -226,9 +318,7 @@ class statsPlots:
         """
         self.data = data
 
-    def plot_events_duration(
-        self, total_size: str, duration: str, point_size: int = 40, *args, **kwargs
-    ) -> matplotlib.axes.Axes:
+    def plot_events_duration(self, total_size: str, duration: str, point_size: int = 40, *args, **kwargs) -> plt.Axes:
         """Scatterplot of collective event duration.
 
         Arguments:

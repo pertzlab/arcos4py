@@ -5,6 +5,7 @@ Example:
     >>> f = filterCollev(data, 'time', 'collid')
     >>> df = f.filter(coll_duration = 9, coll_total_size = 10)
 """
+
 import pandas as pd
 
 from ._stats import calcCollevStats
