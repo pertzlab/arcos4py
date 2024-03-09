@@ -194,14 +194,14 @@ def calculate_pvalue(
             iter(axis)
         except TypeError:
             axis = [axis]
-        for ax, stats_col in zip(axis, _stats_metric):
+        for idx, (ax, stats_col) in enumerate(zip(axis, _stats_metric)):
             # sns.kdeplot(stats_df_mean[stats_col], ax=ax, shade=True, sharey=True)
             sns.histplot(stats_df_mean[stats_col], ax=ax, kde=True, stat='density', common_norm=False, **plot_kwargs)
             # ax.hist(stats_df_mean[stats_col], alpha=0.5)
             ax.set_title(stats_col)
             ax.vlines(stats_df_mean[stats_col].iloc[0], ymin=0, ymax=ax.get_ylim()[1], color='red', ls='--')
             ax.set_xlabel('Value')
-            if len(axis) > 1 and ax.is_first_col():
+            if len(axis) > 1 and idx == 0:
                 ax.set_ylabel('Density')
             else:
                 ax.set_ylabel('')
