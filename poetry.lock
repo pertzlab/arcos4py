@@ -2769,4 +2769,4 @@ test = ["PyYAML", "black", "flake8", "flake8-docstrings", "isort", "mypy", "pyte
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9.1"
-content-hash = "3eb6e6e8fc81fe18a89e40a26c4851066166ff6bb27f74bd9f4659f6b95b9aa6"
+content-hash = "175e99ebd815ef101566ba52cc0fed84a508c9d6de50ee799d98bd9f0da177d3"
