@@ -25,6 +25,8 @@ from sklearn.cluster import DBSCAN, HDBSCAN
 from sklearn.neighbors import KDTree
 from tqdm import tqdm
 
+from ..tools._arcos4py_deprecation import handle_deprecated_params
+
 AVAILABLE_CLUSTERING_METHODS = ['dbscan', 'hdbscan']
 AVAILABLE_LINKING_METHODS = ['nearest', 'transportation']
 
@@ -529,14 +531,15 @@ class Linker:
     def __init__(
         self,
         eps: float = 1,
-        epsPrev: float | None = None,
-        minClSz: int = 1,
-        minSamples: int | None = None,
-        clusteringMethod: str | Callable = "dbscan",
-        linkingMethod: str = "nearest",
+        eps_prev: float | None = None,
+        min_clustersize: int = 1,
+        min_samples: int | None = None,
+        clustering_method: str | Callable = "dbscan",
+        linking_method: str = "nearest",
         predictor: bool | Callable = True,
-        nPrev: int = 1,
-        nJobs: int = 1,
+        n_prev: int = 1,
+        n_jobs: int = 1,
+        **kwargs,
     ):
         """Initializes the Linker object.
 
@@ -557,9 +560,41 @@ class Linker:
             nPrev (int): Number of previous frames the tracking
                 algorithm looks back to connect collective events.
             nJobs (int): Number of jobs to run in parallel (only for clustering algorithm).
+            kwargs: Additional keyword arguments. Includes deprecated parameters for backwards compatibility.
+                - epsPrev: Deprecated parameter for eps_prev. Use eps_prev instead.
+                - minClSz: Deprecated parameter for min_clustersize. Use min_clustersize instead.
+                - minSamples: Deprecated parameter for min_samples. Use min_samples instead.
+                - clusteringMethod: Deprecated parameter for clustering_method. Use clustering_method instead.
+                - nPrev: Deprecated parameter for n_prev. Use n_prev instead.
+                - nJobs: Deprecated parameter for n_jobs. Use n_jobs instead.
         """
+        map_params = {
+            'epsPrev': 'eps_prev',
+            'minClSz': 'min_clustersize',
+            'minSamples': 'min_samples',
+            'clusteringMethod': 'clustering_method',
+            'nPrev': 'n_prev',
+            'nJobs': 'n_jobs',
+        }
+
+        # check for allowed kwargs
+        for key in kwargs:
+            if key not in map_params.keys():
+                raise ValueError(f'Invalid keyword argument {key}')
+
+        # Handle deprecated parameters
+        kwargs = handle_deprecated_params(map_params, **kwargs)
+
+        # Assign parameters
+        eps_prev = kwargs.get('eps_prev', eps_prev)
+        min_clustersize = kwargs.get('min_clustersize', min_clustersize)
+        min_samples = kwargs.get('min_samples', min_samples)
+        clustering_method = kwargs.get('clustering_method', clustering_method)
+        n_prev = kwargs.get('n_prev', n_prev)
+        n_jobs = kwargs.get('n_jobs', n_jobs)
+
         self._predictor: Predictor | None  # for mypy
-        self._memory = Memory(n_timepoints=nPrev)
+        self._memory = Memory(n_timepoints=n_prev)
 
         if callable(predictor):
             self._predictor = Predictor(predictor)
@@ -569,54 +604,54 @@ class Linker:
             self._predictor = None
 
         self._nn_tree: KDTree | None = None
-        if epsPrev is None:
-            self._epsPrev = eps
+        if eps_prev is None:
+            self._eps_prev = eps
         else:
-            self._epsPrev = epsPrev
-        self._n_jobs = nJobs
-        self._validate_input(eps, epsPrev, minClSz, minSamples, clusteringMethod, nPrev, nJobs)
+            self._eps_prev = eps_prev
+        self._n_jobs = n_jobs
+        self._validate_input(eps, eps_prev, min_clustersize, min_samples, clustering_method, n_prev, n_jobs)
 
         self.event_ids = np.empty((0, 0), dtype=np.int64)
         self.max_prev_event_id = 0
 
-        if hasattr(clusteringMethod, '__call__'):  # check if it's callable
-            self.clustering_function = clusteringMethod
+        if hasattr(clustering_method, '__call__'):  # check if it's callable
+            self.clustering_function = clustering_method
         else:
-            if clusteringMethod == "dbscan":
-                self.clustering_function = functools.partial(_dbscan, eps=eps, minClSz=minClSz)
-            elif clusteringMethod == "hdbscan":
+            if clustering_method == "dbscan":
+                self.clustering_function = functools.partial(_dbscan, eps=eps, minClSz=min_clustersize)
+            elif clustering_method == "hdbscan":
                 self.clustering_function = functools.partial(
-                    _hdbscan, eps=eps, minClSz=minClSz, min_samples=minSamples, cluster_selection_method='eom'
+                    _hdbscan, eps=eps, minClSz=min_clustersize, min_samples=min_samples, cluster_selection_method='eom'
                 )
             else:
                 raise ValueError(
                     f'Clustering method must be either in {AVAILABLE_CLUSTERING_METHODS} or a callable with data as the only argument an argument'  # noqa E501
                 )
 
-        if hasattr(linkingMethod, '__call__'):  # check if it's callable
-            self.linking_function = linkingMethod
+        if hasattr(linking_method, '__call__'):  # check if it's callable
+            self.linking_function = linking_method
         else:
-            if linkingMethod == "nearest":
+            if linking_method == "nearest":
                 self.linking_function = 'brute_force_linking'
-            elif linkingMethod == "transportation":
+            elif linking_method == "transportation":
                 self.linking_function = 'transportation_linking'
             else:
                 raise ValueError(
                     f'Linking method must be either in {AVAILABLE_LINKING_METHODS} or a callable'  # noqa E501
                 )
 
-    def _validate_input(self, eps, epsPrev, minClSz, minSamples, clusteringMethod, nPrev, nJobs):
+    def _validate_input(self, eps, eps_prev, min_clustersize, min_samples, clustering_method, n_prev, n_jobs):
         if not isinstance(eps, (int, float, str)):
             raise ValueError(f"eps must be a number or None, got {eps}")
-        if not isinstance(epsPrev, (int, float, type(None))):
-            raise ValueError(f"{epsPrev} must be a number or None, got {epsPrev}")
-        if not isinstance(minSamples, (int, type(None))):
-            raise ValueError(f"{minSamples} must be a number or None, got {minSamples}")
-        for i in [minClSz, nPrev, nJobs]:
+        if not isinstance(eps_prev, (int, float, type(None))):
+            raise ValueError(f"{eps_prev} must be a number or None, got {eps_prev}")
+        if not isinstance(min_samples, (int, type(None))):
+            raise ValueError(f"{min_samples} must be a number or None, got {min_samples}")
+        for i in [min_clustersize, n_prev, n_jobs]:
             if not isinstance(i, int):
                 raise ValueError(f"{i} must be an int, got {i}")
-        if not isinstance(clusteringMethod, str) and not callable(clusteringMethod):
-            raise ValueError(f"clusteringMethod must be a string or a callable, got {clusteringMethod}")
+        if not isinstance(clustering_method, str) and not callable(clustering_method):
+            raise ValueError(f"clusteringMethod must be a string or a callable, got {clustering_method}")
 
     # @profile
     def _clustering(self, x):
@@ -634,7 +669,7 @@ class Linker:
                 cluster_coordinates=cluster_coordinates,
                 memory_cluster_labels=self._memory.all_cluster_ids,
                 memory_kdtree=self._nn_tree,
-                epsPrev=self._epsPrev,
+                epsPrev=self._eps_prev,
                 max_cluster_label=self._memory.max_prev_cluster_id,
             )
         elif self.linking_function == 'transportation_linking':
@@ -643,7 +678,7 @@ class Linker:
                 cluster_coordinates=cluster_coordinates,
                 memory_cluster_labels=self._memory.all_cluster_ids,
                 memory_coordinates=self._memory.all_coordinates,
-                epsPrev=self._epsPrev,
+                epsPrev=self._eps_prev,
                 max_cluster_label=self._memory.max_prev_cluster_id,
                 supply_range=[1, 10],
                 demand_range=[1, 10],
@@ -764,7 +799,7 @@ class DataFrameTracker(BaseTracker):
         coordinates_column: list[str],
         frame_column: str,
         id_column: str | None = None,
-        bin_meas_column: str | None = None,
+        binarized_measurement_column: str | None = None,
         collid_column: str = 'clTrackID',
     ):
         """Initializes the DataFrameTracker object.
@@ -774,7 +809,7 @@ class DataFrameTracker(BaseTracker):
             coordinates_column (list[str]): List of strings representing the coordinate columns.
             frame_column (str): String representing the frame/timepoint column in the dataframe.
             id_column (str | None): String representing the ID column, or None if not present. Defaults to None.
-            bin_meas_column (str | None): String representing the binary measurement column, or None if not present.
+            binarized_measurement_column (str | None): String representing the binary measurement column, or None if not present.
                 Defaults to None.
             collid_column (str): String representing the collision track ID column. Defaults to 'clTrackID'.
         """
@@ -782,9 +817,9 @@ class DataFrameTracker(BaseTracker):
         self._coordinates_column = coordinates_column
         self._frame_column = frame_column
         self._id_column = id_column
-        self._bin_meas_column = bin_meas_column
+        self._binarized_measurement_column = binarized_measurement_column
         self._collid_column = collid_column
-        self._validate_input(coordinates_column, frame_column, id_column, bin_meas_column, collid_column)
+        self._validate_input(coordinates_column, frame_column, id_column, binarized_measurement_column, collid_column)
 
     def _validate_input(
         self,
@@ -809,43 +844,42 @@ class DataFrameTracker(BaseTracker):
     def _select_necessary_columns(
         self,
         data: pd.DataFrame,
-        pos_col: list[str],
+        position_columns: list[str],
     ) -> np.ndarray:
         """Select necessary input colums from input data and returns them as numpy arrays.
 
         Arguments:
             data (DataFrame): Containing necessary columns.
-            frame_col (str): Name of the frame/timepoint column in the dataframe.
-            pos_col (list): string representation of position columns in data.
+            position_columns (list): string representation of position columns in data.
 
         Returns:
             np.ndarray, np.ndarray: Filtered columns necessary for calculation.
         """
-        pos_columns_np = data[pos_col].to_numpy()
+        pos_columns_np = data[position_columns].to_numpy()
         if pos_columns_np.ndim == 1:
             pos_columns_np = pos_columns_np[:, np.newaxis]
         return pos_columns_np
 
-    def _sort_input(self, x: pd.DataFrame, frame_col: str, object_id_col: str | None) -> pd.DataFrame:
+    def _sort_input(self, x: pd.DataFrame, frame_column: str, object_id_column: str | None) -> pd.DataFrame:
         """Sorts the input dataframe according to the frame column and track id column if available."""
-        if object_id_col:
-            x = x.sort_values([frame_col, object_id_col]).reset_index(drop=True)
+        if object_id_column:
+            x = x.sort_values([frame_column, object_id_column]).reset_index(drop=True)
         else:
-            x = x.sort_values([frame_col]).reset_index(drop=True)
+            x = x.sort_values([frame_column]).reset_index(drop=True)
         return x
 
-    def _filter_active(self, data: pd.DataFrame, bin_meas_col: Union[str, None]) -> pd.DataFrame:
+    def _filter_active(self, data: pd.DataFrame, binarized_measurement_column: Union[str, None]) -> pd.DataFrame:
         """Selects rows with binary value of greater than 0.
 
         Arguments:
             data (DataFrame): Dataframe containing necessary columns.
-            bin_meas_col (str|None): Either name of the binary column or None if no such column exists.
+            binarized_measurement_column (str|None): Either name of the binary column or None if no such column exists.
 
         Returns:
             DataFrame: Filtered pandas DataFrame.
         """
-        if bin_meas_col is not None:
-            data = data[data[bin_meas_col] > 0]
+        if binarized_measurement_column is not None:
+            data = data[data[binarized_measurement_column] > 0]
         return data
 
     # @profile
@@ -858,7 +892,7 @@ class DataFrameTracker(BaseTracker):
         Returns:
             pd.DataFrame: Dataframe with event ids.
         """
-        x_filtered = self._filter_active(x, self._bin_meas_column)
+        x_filtered = self._filter_active(x, self._binarized_measurement_column)
 
         coordinates_data = self._select_necessary_columns(
             x_filtered,
@@ -890,7 +924,7 @@ class DataFrameTracker(BaseTracker):
         """
         if x.empty:
             raise ValueError('Input is empty')
-        x_sorted = self._sort_input(x, frame_col=self._frame_column, object_id_col=self._id_column)
+        x_sorted = self._sort_input(x, frame_column=self._frame_column, object_id_column=self._id_column)
 
         for t in range(x_sorted[self._frame_column].max() + 1):
             x_frame = x_sorted.query(f'{self._frame_column} == {t}')
@@ -936,38 +970,38 @@ class ImageTracker(BaseTracker):
 
         return coordinates_array, meas_array
 
-    def _filter_active(self, pos_data: np.ndarray, bin_meas_data: np.ndarray) -> np.ndarray:
+    def _filter_active(self, position_data: np.ndarray, binarized_measurement_column: np.ndarray) -> np.ndarray:
         """Selects rows with binary value of greater than 0.
 
         Arguments:
             frame_data (np.ndarray): frame column as a numpy array.
-            pos_data (np.ndarray): positions/coordinate columns as a numpy array.
-            bin_meas_data (np.ndarray): binary measurement column as a numpy array.
+            position_data (np.ndarray): positions/coordinate columns as a numpy array.
+            binarized_measurement_column (np.ndarray): binary measurement column as a numpy array.
 
         Returns:
             np.ndarray: Filtered numpy arrays.
         """
-        if bin_meas_data is not None:
-            active = np.argwhere(bin_meas_data > 0).flatten()
-            pos_data = pos_data[active]
-        return pos_data
+        if binarized_measurement_column is not None:
+            active = np.argwhere(binarized_measurement_column > 0).flatten()
+            position_data = position_data[active]
+        return position_data
 
-    def _coordinates_to_image(self, x, pos_data, tracked_events):
+    def _coordinates_to_image(self, x, position_data, tracked_events):
         # create empty image
         out_img = np.zeros_like(x, dtype=np.uint16)
         if tracked_events.size == 0:
             return out_img
         tracked_events_mask = tracked_events > 0
 
-        pos_data = pos_data[tracked_events_mask].astype(np.uint16)
-        n_dims = pos_data.shape[1]
+        position_data = position_data[tracked_events_mask].astype(np.uint16)
+        n_dims = position_data.shape[1]
 
         # Raise an error if dimension is zero
         if n_dims == 0:
             raise ValueError("Dimension of input array not supported.")
 
         # Create an indexing tuple
-        indices = tuple(pos_data[:, i] for i in range(n_dims))
+        indices = tuple(position_data[:, i] for i in range(n_dims))
 
         # Index into out_img using the indexing tuple
         out_img[indices] = tracked_events[tracked_events_mask]
@@ -1035,89 +1069,123 @@ class ImageTracker(BaseTracker):
 
 def track_events_dataframe(
     X: pd.DataFrame,
-    coordinates_column: List[str],
+    position_columns: List[str],
     frame_column: str,
     id_column: str | None,
-    bin_meas_column: str | None = None,
-    collid_column: str = "collid",
+    binarized_measurement_column: str | None = None,
+    clid_column: str = "collid",
     eps: float = 1.0,
-    epsPrev: float | None = None,
-    minClSz: int = 3,
-    minSamples: int | None = None,
-    clusteringMethod: str = "dbscan",
-    linkingMethod: str = 'nearest',
-    nPrev: int = 1,
+    eps_prev: float | None = None,
+    min_clustersize: int = 3,
+    min_samples: int | None = None,
+    clustering_method: str = "dbscan",
+    linking_method: str = 'nearest',
+    n_prev: int = 1,
     predictor: bool | Callable = False,
-    nJobs: int = 1,
-    showProgress: bool = True,
+    n_jobs: int = 1,
+    show_progress: bool = True,
+    **kwargs,
 ) -> pd.DataFrame:
     """Function to track collective events in a dataframe.
 
     Arguments:
         X (pd.DataFrame): The input dataframe containing the data to track.
-        coordinates_column (List[str]): The names of the columns representing coordinates.
+        position_columns (List[str]): The names of the columns representing coordinates.
         frame_column (str): The name of the column containing frame ids.
         id_column (str | None): The name of the column representing IDs. None if no such column.
-        bin_meas_column (str | None): The name of the column representing binarized measurements,
+        binarized_measurement_column (str | None): The name of the column representing binarized measurements,
             if None all measurements are used.
-        collid_column (str): The name of the output column representing collective events, will be generated.
+        clid_column (str): The name of the output column representing collective events, will be generated.
         eps (float): Maximum distance for clustering, default is 1.
-        epsPrev (float | None): Maximum distance for linking previous clusters, if None, eps is used. Default is None.
-        minClSz (int): Minimum cluster size. Default is 3.
-        minSamples (int): The number of samples (or total weight) in a neighbourhood for a
+        eps_prev (float | None): Maximum distance for linking previous clusters, if None, eps is used. Default is None.
+        min_clustersize (int): Minimum cluster size. Default is 3.
+        min_samples (int): The number of samples (or total weight) in a neighbourhood for a
             point to be considered as a core point. This includes the point itself.
             Only used if clusteringMethod is 'hdbscan'. If None, minSamples =  minClsz.
-        clusteringMethod (str): The method used for clustering, one of [dbscan, hdbscan]. Default is "dbscan".
-        linkingMethod (str): The method used for linking, one of ['nearest', 'transportsolver']. Default is 'nearest'.
-        nPrev (int): Number of previous frames to consider. Default is 1.
+        clustering_method (str): The method used for clustering, one of [dbscan, hdbscan]. Default is "dbscan".
+        linking_method (str): The method used for linking, one of ['nearest', 'transportsolver']. Default is 'nearest'.
+        n_prev (int): Number of previous frames to consider. Default is 1.
         predictor (bool | Callable): Whether or not to use a predictor. Default is False.
             True uses the default predictor. A callable can be passed to use a custom predictor.
             See default predictor method for details.
-        nJobs (int): Number of jobs to run in parallel. Default is 1.
-        showProgress (bool): Whether or not to show progress bar. Default is True.
+        n_jobs (int): Number of jobs to run in parallel. Default is 1.
+        show_progress (bool): Whether or not to show progress bar. Default is True.
+        **kwargs: Additional keyword arguments. Includes deprecated parameters for backwards compatibility.
 
     Returns:
         pd.DataFrame: Dataframe with tracked events.
     """
+    map_params = {
+        "coordinates_column": "position_columns",
+        "bin_meas_column": "binarized_measurement_column",
+        "collid_column": "clid_column",
+        'epsPrev': 'eps_prev',
+        'minClSz': 'min_clustersize',
+        'minSamples': 'min_samples',
+        'clusteringMethod': 'clustering_method',
+        'linkingMethod': 'linking_method',
+        'nPrev': 'n_prev',
+        'nJobs': 'n_jobs',
+        'showProgress': 'show_progress',
+    }
+
+    # check for allowed kwargs
+    for key in kwargs:
+        if key not in map_params.keys():
+            raise ValueError(f'Invalid keyword argument {key}')
+
+    # Handle deprecated parameters
+    kwargs = handle_deprecated_params(map_params, **kwargs)
+
+    # Assign parameters
+    eps_prev = kwargs.get('eps_prev', eps_prev)
+    min_clustersize = kwargs.get('min_clustersize', min_clustersize)
+    min_samples = kwargs.get('min_samples', min_samples)
+    clustering_method = kwargs.get('clustering_method', clustering_method)
+    linking_method = kwargs.get('linking_method', linking_method)
+    n_prev = kwargs.get('n_prev', n_prev)
+    n_jobs = kwargs.get('n_jobs', n_jobs)
+
     linker = Linker(
         eps=eps,
-        epsPrev=epsPrev,
-        minClSz=minClSz,
-        minSamples=minSamples,
-        clusteringMethod=clusteringMethod,
-        linkingMethod=linkingMethod,
-        nPrev=nPrev,
+        eps_prev=eps_prev,
+        min_clustersize=min_clustersize,
+        min_samples=min_samples,
+        clustering_method=clustering_method,
+        linking_method=linking_method,
+        n_prev=n_prev,
         predictor=predictor,
-        nJobs=nJobs,
+        n_jobs=n_jobs,
     )
     tracker = DataFrameTracker(
         linker=linker,
-        coordinates_column=coordinates_column,
+        coordinates_column=position_columns,
         frame_column=frame_column,
         id_column=id_column,
-        bin_meas_column=bin_meas_column,
-        collid_column=collid_column,
+        binarized_measurement_column=binarized_measurement_column,
+        collid_column=clid_column,
     )
     df_out = pd.concat(
-        [timepoint for timepoint in tqdm(tracker.track(X), total=X[frame_column].nunique(), disable=not showProgress)]
+        [timepoint for timepoint in tqdm(tracker.track(X), total=X[frame_column].nunique(), disable=not show_progress)]
     ).reset_index(drop=True)
-    return df_out.query(f"{collid_column} != -1").reset_index(drop=True)
+    return df_out.query(f"{clid_column} != -1").reset_index(drop=True)
 
 
 def track_events_image(
     X: np.ndarray,
     eps: float = 1,
-    epsPrev: float | None = None,
-    minClSz: int = 1,
-    minSamples: int | None = None,
-    clusteringMethod: str = "dbscan",
-    nPrev: int = 1,
+    eps_prev: float | None = None,
+    min_clustersize: int = 1,
+    min_samples: int | None = None,
+    clustering_method: str = "dbscan",
+    n_prev: int = 1,
     predictor: bool | Callable = False,
-    linkingMethod: str = 'nearest',
+    linking_method: str = 'nearest',
     dims: str = "TXY",
     downsample: int = 1,
-    nJobs: int = 1,
-    showProgress: bool = True,
+    n_jobs: int = 1,
+    show_progress: bool = True,
+    **kwargs,
 ) -> np.ndarray:
     """Function to track events in an image using specified linking and clustering methods.
 
@@ -1139,35 +1207,72 @@ def track_events_image(
         downsample (int): Factor by which to downsample the image. Default is 1.
         nJobs (int): Number of jobs to run in parallel. Default is 1.
         showProgress (bool): Whether or not to show progress bar. Default is True.
+        **kwargs: Additional keyword arguments. Includes deprecated parameters for backwards compatibility.
+            - epsPrev: Deprecated parameter for eps_prev. Use eps_prev instead.
+            - minClSz: Deprecated parameter for min_clustersize. Use min_clustersize instead.
+            - minSamples: Deprecated parameter for min_samples. Use min_samples instead.
+            - clusteringMethod: Deprecated parameter for clustering_method. Use clustering_method instead.
+            - linkingMethod: Deprecated parameter for linking_method. Use linking_method instead.
+            - nPrev: Deprecated parameter for n_prev. Use n_prev instead.
+            - nJobs: Deprecated parameter for n_jobs. Use n_jobs instead.
+            - showProgress: Deprecated parameter for show_progress. Use show_progress instead.
 
     Returns:
         np.ndarray: Array of images with tracked events.
     """
+    map_params = {
+        'epsPrev': 'eps_prev',
+        'minClSz': 'min_clustersize',
+        'minSamples': 'min_samples',
+        'clusteringMethod': 'clustering_method',
+        'linkingMethod': 'linking_method',
+        'nPrev': 'n_prev',
+        'nJobs': 'n_jobs',
+        'showProgress': 'show_progress',
+    }
+
+    # check for allowed kwargs
+    for key in kwargs:
+        if key not in map_params.keys():
+            raise ValueError(f'Invalid keyword argument {key}')
+
+    # Handle deprecated parameters
+    kwargs = handle_deprecated_params(map_params, **kwargs)
+
+    # Assign parameters
+    eps_prev = kwargs.get('eps_prev', eps_prev)
+    min_clustersize = kwargs.get('min_clustersize', min_clustersize)
+    min_samples = kwargs.get('min_samples', min_samples)
+    clustering_method = kwargs.get('clustering_method', clustering_method)
+    linking_method = kwargs.get('linking_method', linking_method)
+    n_prev = kwargs.get('n_prev', n_prev)
+    n_jobs = kwargs.get('n_jobs', n_jobs)
+
     # Determine the dimensionality
     spatial_dims = set("XYZ")
     D = len([d for d in dims if d in spatial_dims])
 
     # Adjust parameters based on dimensionality
-    adjusted_epsPrev = epsPrev / downsample if epsPrev is not None else None
-    adjusted_minClSz = int(minClSz / (downsample**D))
-    adjusted_minSamples = int(minSamples / (downsample**D)) if minSamples is not None else None
+    adjusted_epsPrev = eps_prev / downsample if eps_prev is not None else None
+    adjusted_minClSz = int(min_clustersize / (downsample**D))
+    adjusted_minSamples = int(min_samples / (downsample**D)) if min_samples is not None else None
 
     linker = Linker(
         eps=eps / downsample,
-        epsPrev=adjusted_epsPrev,
-        minClSz=adjusted_minClSz,
-        minSamples=adjusted_minSamples,
-        clusteringMethod=clusteringMethod,
-        linkingMethod=linkingMethod,
-        nPrev=nPrev,
+        eps_prev=adjusted_epsPrev,
+        min_clustersize=adjusted_minClSz,
+        min_samples=adjusted_minSamples,
+        clustering_method=clustering_method,
+        linking_method=linking_method,
+        n_prev=n_prev,
         predictor=predictor,
-        nJobs=nJobs,
+        n_jobs=n_jobs,
     )
     tracker = ImageTracker(linker, downsample=downsample)
     # find indices of T in dims
     T_index = dims.upper().index("T")
     return np.stack(
-        [timepoint for timepoint in tqdm(tracker.track(X, dims), total=X.shape[T_index], disable=not showProgress)],
+        [timepoint for timepoint in tqdm(tracker.track(X, dims), total=X.shape[T_index], disable=not show_progress)],
         axis=T_index,
     )
 
@@ -1287,21 +1392,21 @@ class detectCollev:
                 self.input_data = self.input_data.copy()
             return track_events_dataframe(
                 X=self.input_data,
-                coordinates_column=self.posCols,
+                position_columns=self.posCols,
                 frame_column=self.frame_column,
                 id_column=self.id_column,
-                bin_meas_column=self.bin_meas_column,
-                collid_column=self.clid_column,
+                binarized_measurement_column=self.bin_meas_column,
+                clid_column=self.clid_column,
                 eps=self.eps,
-                epsPrev=self.epsPrev,
-                minClSz=self.minClSz,
-                minSamples=self.min_samples,
-                clusteringMethod=self.method,
-                linkingMethod=self.linkingMethod,
-                nPrev=self.nPrev,
+                eps_prev=self.epsPrev,
+                min_clustersize=self.minClSz,
+                min_samples=self.min_samples,
+                clustering_method=self.method,
+                linking_method=self.linkingMethod,
+                n_prev=self.nPrev,
                 predictor=self.predictor,
-                nJobs=self.n_jobs,
-                showProgress=self.show_progress,
+                n_jobs=self.n_jobs,
+                show_progress=self.show_progress,
             )
         elif isinstance(self.input_data, np.ndarray):
             if copy:
@@ -1309,16 +1414,16 @@ class detectCollev:
             return track_events_image(
                 X=self.input_data,
                 eps=self.eps,
-                epsPrev=self.epsPrev,
-                minClSz=self.minClSz,
-                minSamples=self.min_samples,
-                clusteringMethod=self.method,
-                nPrev=self.nPrev,
+                eps_prev=self.epsPrev,
+                min_clustersize=self.minClSz,
+                min_samples=self.min_samples,
+                clustering_method=self.method,
+                n_prev=self.nPrev,
                 predictor=self.predictor,
-                linkingMethod=self.linkingMethod,
+                linking_method=self.linkingMethod,
                 dims=self.dims,
-                nJobs=self.n_jobs,
-                showProgress=self.show_progress,
+                n_jobs=self.n_jobs,
+                show_progress=self.show_progress,
             )
 
 
@@ -1334,8 +1439,8 @@ def _nearest_neighbour_eps(
 def estimate_eps(
     data: pd.DataFrame,
     method: str = 'kneepoint',
-    pos_cols: list[str] = ['x,y'],
-    frame_col: str = 't',
+    position_columns: list[str] = ['x,y'],
+    frame_column: str = 't',
     n_neighbors: int = 5,
     plot: bool = True,
     plt_size: tuple[int, int] = (5, 5),
@@ -1371,10 +1476,6 @@ def estimate_eps(
     Returns:
         Eps (float): eps parameter for DBSCAN.
     """
-    subset = [frame_col] + pos_cols
-    for i in subset:
-        if i not in data.columns:
-            raise ValueError(f"Column {i} not in data")
     method_option = ['kneepoint', 'mean', 'median']
 
     if method not in method_option:
@@ -1406,6 +1507,8 @@ def estimate_eps(
         'polynomial_degree': int,
         'mean_multiplier': (float, int),
         'median_multiplier': (float, int),
+        'pos_cols': list,
+        'frame_col': str,
     }
 
     allowedkwargs: dict[str, list[str]] = {
@@ -1414,8 +1517,13 @@ def estimate_eps(
         'median_values': ['median_multiplier'],
     }
 
+    map_deprecated_parameters = {
+        'pos_cols': 'position_columns',
+        'frame_col': 'frame_column',
+    }
+
     for key in kwargs:
-        if key not in allowedkwargs[allowedtypes[method]]:
+        if key not in allowedkwargs[allowedtypes[method]] and key not in map_deprecated_parameters:
             raise ValueError(f'{key} keyword not in allowed keywords {allowedkwargs[allowedtypes[method]]}')
         if not isinstance(kwargs[key], kwtypes[key]):
             raise ValueError(f'{key} must be of type {kwtypes[key]}')
@@ -1424,7 +1532,23 @@ def estimate_eps(
     for kw in allowedkwargs[allowedtypes[method]]:
         kwargs.setdefault(kw, kwdefaults[kw])
 
-    subset = [frame_col] + pos_cols
+    kwargs = handle_deprecated_params(map_deprecated_parameters, **kwargs)
+
+    # assign parameters
+    position_columns = kwargs.get('position_columns', position_columns)  # type: ignore
+    frame_column = kwargs.get('frame_column', frame_column)  # type: ignore
+
+    # remove deprecated parameters
+    for key in map_deprecated_parameters:
+        if key in kwargs:
+            del kwargs[key]
+
+    subset = [frame_column] + position_columns
+    for i in subset:
+        if i not in data.columns:
+            raise ValueError(f"Column {i} not in data")
+
+    subset = [frame_column] + position_columns
     data_np = data[subset].to_numpy(dtype=np.float64)
     # sort by frame
     data_np = data_np[data_np[:, 0].argsort()]

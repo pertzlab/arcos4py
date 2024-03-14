@@ -13,20 +13,27 @@ import pandas as pd
 from scipy.spatial import ConvexHull, QhullError
 from scipy.spatial.distance import pdist
 
+from ._arcos4py_deprecation import handle_deprecated_params
+
 
 def calculate_statistics_per_frame(
     data: pd.DataFrame,
     frame_column: str,
-    collid_column: str,
-    pos_columns: Union[List[str], None] = None,
+    clid_column: str,
+    position_columns: Union[List[str], None] = None,
+    **kwargs,
 ) -> pd.DataFrame:
     """Calculate summary statistics for collective events based on the entire duration of each event.
 
     Arguments:
         data (pd.DataFrame): Input data containing information on the collective events.
         frame_column (str): The column name representing the frame numbers.
-        collid_column (str): The column name representing the collective event IDs.
-        pos_columns (List[str], optional): List of column names representing the position coordinates. Defaults to None.
+        clid_column (str): The column name representing the collective event IDs.
+        position_columns (List[str], optional): List of column names representing the position coordinates. Defaults to None.
+        **kwargs: Additional keyword arguments. Includes deprecated parameters.
+            - collid_column (str): Deprecated. Use clid_column instead.
+            - pos_columns (List[str], optional): Deprecated. Use position_columns instead.
+
 
     Returns:
         pd.DataFrame: A DataFrame containing the summary statistics of the collective events.
@@ -46,41 +53,60 @@ def calculate_statistics_per_frame(
         - centroid_speed: The speed of the centroid, calculated as the norm of the change
             in x and y divided by the duration (calculated if pos_columns is provided).
     """
+    map_deprecated_params = {
+        "collid_column": "clid_column",
+        "pos_columns": "position_columns",
+    }
+
+    # check allowed kwargs
+    allowed_kwargs = map_deprecated_params.keys()
+    for key in kwargs:
+        if key not in allowed_kwargs:
+            raise ValueError(f"Got an unexpected keyword argument '{key}'")
+
+    updated_kwargs = handle_deprecated_params(map_deprecated_params, **kwargs)
+
+    # Assigning the parameters
+    clid_column = updated_kwargs.get("clid_column", clid_column)
+    position_columns = updated_kwargs.get("position_columns", position_columns)
+
     if data.empty:
         raise ValueError("The input data is empty.")
-    necessary_columns = [frame_column, collid_column]
-    if pos_columns:
-        necessary_columns.extend(pos_columns)
+    necessary_columns = [frame_column, clid_column]
+    if position_columns:
+        necessary_columns.extend(position_columns)
 
     for col in necessary_columns:
         if col not in data.columns and col is not None:
             raise ValueError(f"The column '{col}' is not present in the input data.")
 
-    data = data.rename(columns={frame_column: frame_column, collid_column: collid_column})
-    collid_groups = data.groupby([frame_column, collid_column])
+    data = data.rename(columns={frame_column: frame_column, clid_column: clid_column})
+    collid_groups = data.groupby([frame_column, clid_column])
     stats_list = []
 
     for (frame, collid), group_data in collid_groups:
 
-        frame_stats = {collid_column: collid, frame_column: frame}
+        frame_stats = {clid_column: collid, frame_column: frame}
 
         frame_stats['size'] = group_data.count()[frame_column]
 
         # If pos_columns are provided, calculate spatial statistics for this frame
-        if pos_columns:
+        if position_columns:
             # Calculate centroid
-            centroid = group_data[pos_columns].mean().to_dict()
+            centroid = group_data[position_columns].mean().to_dict()
             for pos_col, cent_val in centroid.items():
                 frame_stats[f'centroid_{pos_col}'] = cent_val
 
             # Calculate spatial extent
-            spatial_extent = pdist(group_data[pos_columns].values).max() if len(group_data) > 1 else 0
+            spatial_extent = pdist(group_data[position_columns].values).max() if len(group_data) > 1 else 0
             frame_stats['spatial_extent'] = spatial_extent
 
             # Calculate convex hull area
             try:
                 convex_hull_area = (
-                    ConvexHull(group_data[pos_columns].values).volume if len(group_data) > len(pos_columns) else 0
+                    ConvexHull(group_data[position_columns].values).volume
+                    if len(group_data) > len(position_columns)
+                    else 0
                 )
             except QhullError:
                 convex_hull_area = 0
@@ -92,21 +118,25 @@ def calculate_statistics_per_frame(
     stats_df = pd.DataFrame(stats_list)
 
     # If pos_columns are provided, we can calculate speed and direction by looking at changes between frames
-    if pos_columns:
-        stats_df.sort_values(by=[collid_column, frame_column], inplace=True)
+    if position_columns:
+        stats_df.sort_values(by=[clid_column, frame_column], inplace=True)
 
-        for i, col in enumerate(pos_columns):
-            stats_df[f'delta_{col}'] = stats_df.groupby(collid_column)[f'centroid_{col}'].diff()
+        for i, col in enumerate(position_columns):
+            stats_df[f'delta_{col}'] = stats_df.groupby(clid_column)[f'centroid_{col}'].diff()
 
         # Calculate speed (the norm of the delta vector)
-        stats_df['centroid_speed'] = np.linalg.norm(stats_df[[f'delta_{col}' for col in pos_columns]].values, axis=1)
+        stats_df['centroid_speed'] = np.linalg.norm(
+            stats_df[[f'delta_{col}' for col in position_columns]].values, axis=1
+        )
 
         # Calculate direction (only for 2D)
-        if len(pos_columns) == 2:
-            stats_df['direction'] = np.arctan2(stats_df['delta_' + pos_columns[1]], stats_df['delta_' + pos_columns[0]])
+        if len(position_columns) == 2:
+            stats_df['direction'] = np.arctan2(
+                stats_df['delta_' + position_columns[1]], stats_df['delta_' + position_columns[0]]
+            )
 
         # Clean up temporary delta columns
-        stats_df.drop(columns=[f'delta_{col}' for col in pos_columns], inplace=True)
+        stats_df.drop(columns=[f'delta_{col}' for col in position_columns], inplace=True)
 
     return stats_df
 
@@ -114,9 +144,10 @@ def calculate_statistics_per_frame(
 def calculate_statistics(
     data: pd.DataFrame,
     frame_column: str,
-    collid_column: str,
+    clid_column: str,
     obj_id_column: Union[str, None] = None,
-    pos_columns: Union[List[str], None] = None,
+    position_columns: Union[List[str], None] = None,
+    **kwargs,
 ) -> pd.DataFrame:
     """Calculate summary statistics for collective events based on the entire duration of each event.
 
@@ -126,6 +157,9 @@ def calculate_statistics(
         collid_column (str): The column name representing the collective event IDs.
         obj_id_column (str, optional): The column name representing the object IDs. Defaults to None.
         pos_columns (List[str], optional): List of column names representing the position coordinates. Defaults to None.
+        **kwargs: Additional keyword arguments. Includes deprecated parameters.
+            - collid_column (str): Deprecated. Use clid_column instead.
+            - pos_columns (List[str], optional): Deprecated. Use position_columns instead.
 
     Returns:
         pd.DataFrame: A DataFrame containing the summary statistics of the collective events.
@@ -153,27 +187,44 @@ def calculate_statistics(
         - size_variability: The standard deviation of the event size over all frames, providing a measure of the
             variability in the size of the event over time (calculated if obj_id_column is provided).
     """
+    map_deprecated_params = {
+        "collid_column": "clid_column",
+        "pos_columns": "position_columns",
+    }
+
+    # check allowed kwargs
+    allowed_kwargs = map_deprecated_params.keys()
+    for key in kwargs:
+        if key not in allowed_kwargs:
+            raise ValueError(f"Got an unexpected keyword argument '{key}'")
+
+    updated_kwargs = handle_deprecated_params(map_deprecated_params, **kwargs)
+
+    # Assigning the parameters
+    clid_column = updated_kwargs.get("clid_column", clid_column)
+    position_columns = updated_kwargs.get("position_columns", position_columns)
+
     # Error handling: Check if necessary columns are present in the input data
     if data.empty:
         raise ValueError("The input data is empty.")
-    necessary_columns = [frame_column, collid_column]
+    necessary_columns = [frame_column, clid_column]
     if obj_id_column:
         necessary_columns.append(obj_id_column)
-    if pos_columns:
-        necessary_columns.extend(pos_columns)
+    if position_columns:
+        necessary_columns.extend(position_columns)
 
     for col in necessary_columns:
         if col not in data.columns and col is not None:
             raise ValueError(f"The column '{col}' is not present in the input data.")
 
-    collid_groups = data.groupby(collid_column)
+    collid_groups = data.groupby(clid_column)
 
     # Initialize an empty list to store the statistics
     stats_list = []
 
     for collid, group_data in collid_groups:
 
-        collid_stats = {collid_column: collid}
+        collid_stats = {clid_column: collid}
 
         # Grouping by collid_column to get initial statistics
         duration = group_data[frame_column].max() - group_data[frame_column].min() + 1
@@ -193,13 +244,13 @@ def calculate_statistics(
         collid_stats['max_size'] = frame_size_stats.max()
 
         # If posCol is provided, calculate centroid coordinates for the
-        if pos_columns:
+        if position_columns:
             tp_1 = collid_stats['first_timepoint']
             tp_2 = collid_stats['last_timepoint']
 
-            centroid_data = group_data.groupby(frame_column)[pos_columns].mean().reset_index()
+            centroid_data = group_data.groupby(frame_column)[position_columns].mean().reset_index()
 
-            for col in pos_columns:
+            for col in position_columns:
                 collid_stats[f'first_frame_centroid_{col}'] = centroid_data.query(f'{frame_column} == {tp_1}')[
                     col
                 ].to_numpy()[0]
@@ -209,34 +260,34 @@ def calculate_statistics(
 
             # Calculate speed and direction
             speed = np.linalg.norm(
-                np.column_stack([collid_stats[f'first_frame_centroid_{col}'] for col in pos_columns])
-                - np.column_stack([collid_stats[f'last_frame_centroid_{col}'] for col in pos_columns]),
+                np.column_stack([collid_stats[f'first_frame_centroid_{col}'] for col in position_columns])
+                - np.column_stack([collid_stats[f'last_frame_centroid_{col}'] for col in position_columns]),
                 axis=1,
             ) / (collid_stats['duration'] - 1)
 
             collid_stats['centroid_speed'] = speed[0]
 
             # Direction For 2D data
-            if len(pos_columns) == 2:
+            if len(position_columns) == 2:
                 collid_stats['direction'] = np.arctan2(
-                    collid_stats[f'last_frame_centroid_{pos_columns[1]}']
-                    - collid_stats[f'first_frame_centroid_{pos_columns[1]}'],
-                    collid_stats[f'last_frame_centroid_{pos_columns[0]}']
-                    - collid_stats[f'first_frame_centroid_{pos_columns[0]}'],
+                    collid_stats[f'last_frame_centroid_{position_columns[1]}']
+                    - collid_stats[f'first_frame_centroid_{position_columns[1]}'],
+                    collid_stats[f'last_frame_centroid_{position_columns[0]}']
+                    - collid_stats[f'first_frame_centroid_{position_columns[0]}'],
                 )
             # Direction For 3D data
-            elif len(pos_columns) == 3:
+            elif len(position_columns) == 3:
                 dx = (
-                    collid_stats[f'last_frame_centroid_{pos_columns[0]}']
-                    - collid_stats[f'first_frame_centroid_{pos_columns[0]}']
+                    collid_stats[f'last_frame_centroid_{position_columns[0]}']
+                    - collid_stats[f'first_frame_centroid_{position_columns[0]}']
                 )
                 dy = (
-                    collid_stats[f'last_frame_centroid_{pos_columns[1]}']
-                    - collid_stats[f'first_frame_centroid_{pos_columns[1]}']
+                    collid_stats[f'last_frame_centroid_{position_columns[1]}']
+                    - collid_stats[f'first_frame_centroid_{position_columns[1]}']
                 )
                 dz = (
-                    collid_stats[f'last_frame_centroid_{pos_columns[2]}']
-                    - collid_stats[f'first_frame_centroid_{pos_columns[2]}']
+                    collid_stats[f'last_frame_centroid_{position_columns[2]}']
+                    - collid_stats[f'first_frame_centroid_{position_columns[2]}']
                 )
 
                 # Calculate azimuth and elevation
@@ -251,13 +302,15 @@ def calculate_statistics(
                 frame_data = group_data.query(f'{frame_column} == {frame_number}')
 
                 # Calculate spatial extent
-                spatial_extent = pdist(frame_data[pos_columns].values).max() if len(frame_data) > 1 else 0
+                spatial_extent = pdist(frame_data[position_columns].values).max() if len(frame_data) > 1 else 0
                 collid_stats[f'{frame_name}_spatial_extent'] = spatial_extent
 
                 # Calculate convex hull area
                 try:
                     convex_hull_area = (
-                        ConvexHull(frame_data[pos_columns].values).volume if len(frame_data) > len(pos_columns) else 0
+                        ConvexHull(frame_data[position_columns].values).volume
+                        if len(frame_data) > len(position_columns)
+                        else 0
                     )
                 except QhullError:
                     convex_hull_area = 0
@@ -271,9 +324,9 @@ def calculate_statistics(
     # Calculate size variability
     if obj_id_column:
         # Calculating size for each collid and frame
-        frame_size_stats = data.groupby([collid_column, frame_column])[obj_id_column].nunique().reset_index(name='size')
-        size_variability = frame_size_stats.groupby(collid_column)['size'].std().reset_index(name='size_variability')
-        stats_df = stats_df.merge(size_variability, on=collid_column, how='left')
+        frame_size_stats = data.groupby([clid_column, frame_column])[obj_id_column].nunique().reset_index(name='size')
+        size_variability = frame_size_stats.groupby(clid_column)['size'].std().reset_index(name='size_variability')
+        stats_df = stats_df.merge(size_variability, on=clid_column, how='left')
 
     return stats_df
 

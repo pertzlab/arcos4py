@@ -17,53 +17,78 @@ from scipy.ndimage import median_filter
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures, minmax_scale
 
+from ..tools._arcos4py_deprecation import handle_deprecated_params
+
 
 class detrender:
     """Smooth and de-trend input data.
-
-    First, a short-term median filter with size smoothK is applied
-    to remove fast noise from the time series.
+    First, a short-term median filter with size smooth_k is applied
+    to remove fast noise from the time series. smooth_k is applied
     The subsequent de-trending can be performed with a long-term median filter
-    with the size biasK {biasMet = "runmed"}
-    or by fitting a polynomial of degree polyDeg {biasMet = "lm"}.
-
+    with the size bias_k {bias_method = "runmed"}
+    or by fitting a polynomial of degree polynomial_degree {bias_method = "lm"}.
     Attributes:
-        smoothK (int): Representing the size of the short-term median smoothing filter.
-        biasK (int): Representing the size of the long-term de-trending median filter.
-        peakThr (float): Threshold for rescaling of the de-trended signal.
-        polyDeg (int): Sets the degree of the polynomial for lm fitting.
-        biasMet (str): Indicating de-trending method, one of ['runmed', 'lm', 'none'].
+        smooth_k (int): Representing the size of the short-term median smoothing filter.
+        bias_k (int): Representing the size of the long-term de-trending median filter.
+        peak_threshold (float): Threshold for rescaling of the de-trended signal.ian filter.
+        polynomial_degree (int): Sets the degree of the polynomial for lm fitting..
+        bias_method (str): Indicating de-trending method, one of ['runmed', 'lm', 'none'].
+        n_jobs (int): Number of paralell workers to spawn, -1 uses all available cpus.biasMet (str):
+            Indicating de-trending method, one of ['runmed', 'lm', 'none'].
     """
 
     def __init__(
         self,
-        smoothK: int = 3,
-        biasK: int = 51,
-        peakThr: float = 0.2,
-        polyDeg: int = 1,
-        biasMet: str = "runmed",
+        smooth_k: int = 3,
+        bias_k: int = 51,
+        peak_threshold: float = 0.2,
+        polynomial_degree: int = 1,
+        bias_method: str = "runmed",
         n_jobs: int = 1,
+        **kwargs,
     ) -> None:
         """Smooth and de-trend input data.
 
         Arguments:
-            smoothK (int): Representing the size of the short-term median smoothing filter.
-            biasK (int): Representing the size of the long-term de-trending median filter.
-            peakThr (float): Threshold for rescaling of the de-trended signal.
-            polyDeg (int): Sets the degree of the polynomial for lm fitting.
-            biasMet (str): Indicating de-trending method, one of ['runmed', 'lm', 'none'].
-            n_jobs (int): Number of paralell workers to spawn, -1 uses all available cpus.
+            smooth_k (int): Representing the size of the short-term median smoothing filter.
+            bias_k (int): Representing the size of the long-term de-trending median filter.ian filter.
+            peak_threshold (float): Threshold for rescaling of the de-trended signal.
+            polynomial_degree (int): Sets the degree of the polynomial for lm fitting.
+            bias_method (str): Indicating de-trending method, one of ['runmed', 'lm', 'none'].
+            n_jobs (int): Number of parallel workers to spawn, -1 uses all available CPUs.
         """
+        # handle deprecated parameters
+        param_mapping = {
+            "smoothK": "smooth_k",
+            "biasK": "bias_k",
+            "peakThr": "peak_threshold",
+            "polyDeg": "polynomial_degree",
+            "biasMet": "bias_method",
+        }
+        # allowed_kwargs
+        allowed_kwargs = param_mapping.keys()
+        for key in kwargs:
+            if key not in allowed_kwargs:
+                raise ValueError(f"Invalid keyword argument: {key}")
+        updated_kwargs = handle_deprecated_params(param_mapping, **kwargs)
+
+        # update the parameters
+        smooth_k = updated_kwargs.get("smooth_k", smooth_k)
+        bias_k = updated_kwargs.get("bias_k", bias_k)
+        peak_threshold = updated_kwargs.get("peak_threshold", peak_threshold)
+        polynomial_degree = updated_kwargs.get("polynomial_degree", polynomial_degree)
+        bias_method = updated_kwargs.get("bias_method", bias_method)
+
         # check if biasmethod contains one of these three types
         biasMet_types = ["runmed", "lm", "none"]
-        if biasMet not in biasMet_types:
+        if bias_method not in biasMet_types:
             raise ValueError(f"Invalid bias method. Expected one of: {biasMet_types}")
 
-        self.smoothK = smoothK
-        self.biasK = biasK
-        self.peakThr = peakThr
-        self.polyDeg = polyDeg
-        self.biasMet = biasMet
+        self.smooth_k = smooth_k
+        self.bias_k = bias_k
+        self.peak_threshold = peak_threshold
+        self.polynomial_degree = polynomial_degree
+        self.bias_method = bias_method
         self.n_jobs = n_jobs
 
     def _detrend_runnmed(self, x, filter_size, endrule_mode):
@@ -86,19 +111,19 @@ class detrender:
 
     def _run_detrend(self, x: np.ndarray) -> np.ndarray:
         if x.size:
-            local_smoothed = self._detrend_runnmed(x, self.smoothK, "nearest")
-            if self.biasMet != "none":
-                if self.biasMet == "runmed":
+            local_smoothed = self._detrend_runnmed(x, self.smooth_k, "nearest")
+            if self.bias_method != "none":
+                if self.bias_method == "runmed":
                     global_smoothed = self._detrend_global_runmed(
                         x=local_smoothed,
-                        filter_size=self.biasK,
+                        filter_size=self.bias_k,
                     )
-                elif self.biasMet == "lm":
-                    global_smoothed = self._detrend_lm(local_smoothed, self.polyDeg)
+                elif self.bias_method == "lm":
+                    global_smoothed = self._detrend_lm(local_smoothed, self.polynomial_degree)
 
                 local_smoothed = np.subtract(local_smoothed, global_smoothed)
                 local_smoothed = np.clip(local_smoothed, 0, None)
-                if (local_smoothed.max() - local_smoothed.min()) > self.peakThr:
+                if (local_smoothed.max() - local_smoothed.min()) > self.peak_threshold:
                     local_smoothed = np.divide(local_smoothed, local_smoothed.max())
                 local_smoothed = np.nan_to_num(local_smoothed)
         else:
@@ -166,99 +191,124 @@ class binData(detrender):
 
     def __init__(
         self,
-        smoothK: int = 3,
-        biasK: int = 51,
-        peakThr: float = 0.2,
-        binThr: float = 0.1,
-        polyDeg: int = 1,
-        biasMet: str = "runmed",
+        smooth_k: int = 3,
+        bias_k: int = 51,
+        peak_threshold: float = 0.2,
+        binarization_threshold: float = 0.1,
+        polynomial_degree: int = 1,
+        bias_method: str = "runmed",
         n_jobs: int = 1,
+        **kwargs,
     ) -> None:
         """Smooth, de-trend, and binarise the input data.
 
         Arguments:
-            smoothK (int): Size of the short-term median smoothing filter.
-            biasK (int): Size of the long-term de-trending median filter.
-            peakThr (float): Threshold for rescaling of the de-trended signal.
-            binThr (float): Threshold for binarizing the de-trended signal.
-            polyDeg (int): Sets the degree of the polynomial for lm fitting.
-            biasMet (str): De-trending method, one of ['runmed', 'lm', 'none'].
+            smooth_k (int): Size of the short-term median smoothing filter.
+            bias_k (int): Size of the long-term de-trending median filter.
+            peak_threshold (float): Threshold for rescaling of the de-trended signal.
+            binarization_threshold (float): Threshold for binarizing the de-trended signal.
+            polynomial_degree (int): Sets the degree of the polynomial for lm fitting.
+            bias_method (str): De-trending method, one of ['runmed', 'lm', 'none'].
             n_jobs (int): Number of jobs to run in parallel.
         """
-        super().__init__(smoothK, biasK, peakThr, polyDeg, biasMet, n_jobs)
-        self.binThr = binThr
+        super().__init__(smooth_k, bias_k, peak_threshold, polynomial_degree, bias_method, n_jobs, **kwargs)
+        self.binarization_threshold = binarization_threshold
 
-    def _rescale_data(self, x: np.ndarray, meas_index: int, feat_range: tuple = (0, 1)) -> np.ndarray:
+    def _rescale_data(self, x: np.ndarray, measurement_index: int, feature_range: tuple = (0, 1)) -> np.ndarray:
         """Rescale data to a given range."""
-        meas_array = x[:, meas_index].astype('float64')
-        rescaled = minmax_scale(meas_array, feature_range=feat_range)
-        x[:, meas_index] = rescaled
+        meas_array = x[:, measurement_index].astype('float64')
+        rescaled = minmax_scale(meas_array, feature_range=feature_range)
+        x[:, measurement_index] = rescaled
         return x
 
     def _bin_data(self, x: np.ndarray) -> np.ndarray:
-        bin = (x >= self.binThr).astype(np.int_)
+        bin = (x >= self.binarization_threshold).astype(np.int_)
         return bin
 
-    def run(self, x: pd.DataFrame, colGroup: str | None, colMeas: str, colFrame: str) -> pd.DataFrame:
+    def run(
+        self, x: pd.DataFrame, group_column: str | None, measurement_column: str, frame_column: str, **kwargs
+    ) -> pd.DataFrame:
         """Runs binarization and detrending.
 
-        If the bias Method is 'none', first it rescales the data to between [0,1], then
+        If the bias_method is 'none', first it rescales the data to between [0,1], then
         local smoothing is applied to the measurement by groups, followed by
         binarization.
 
-        If biasMeth is one of ['lm', 'runmed'], first the data is detrended locally with a
+        If bias_method is one of ['lm', 'runmed'], first the data is detrended locally with a
         median filter and then detrended globally, for 'lm' with a linear model and for 'runmed' with a
         median filter.
         Followed by binarization of the data.
 
         Arguments:
             x (DataFrame): The time-series data for smoothing, detrending and binarization.
-            colGroup (str | None): Object id column in x. Detrending and rescaling is performed on a per-object basis.
+            group_column (str | None): Object id column in x. Detrending and rescaling is performed on a per-object basis.
                 If None, no detrending is performed, only rescaling and bias method is ignored.
-            colMeas (str): Measurement column in x on which detrending and rescaling is performed.
-            colFrame (str): Frame column in Time-series data. Used for sorting.
+            measurement_column (str): Measurement column in x on which detrending and rescaling is performed.
+            frame_column (str): Frame column in Time-series data. Used for sorting.
+            **kwargs: Additional keyword arguments. Includes old parameters for backwards compatibility.
+                - GroupCol (str): Object id column in x. Detrending and rescaling is performed on a per-object basis.
+                - colMeas (str): Measurement column in x on which detrending and rescaling is performed.
+                - colFrame (str): Frame column in Time-series data. Used for sorting.
 
         Returns:
             DataFrame: Dataframe containing binarized data, rescaled data and the original columns.
         """
-        if colGroup is None:
-            return self._run_without_groupcol(x, colMeas, colFrame)
-        else:
-            return self._run_with_groupcol(x, colGroup, colMeas, colFrame)
+        # handle deprecated parameters
+        param_mapping = {
+            "GroupCol": "group_column",
+            "colMeas": "measurement_column",
+            "colFrame": "frame_column",
+        }
+        # allowed_kwargs
+        allowed_kwargs = param_mapping.keys()
+        for key in kwargs:
+            if key not in allowed_kwargs:
+                raise ValueError(f"Invalid keyword argument: {key}")
+        updated_kwargs = handle_deprecated_params(param_mapping, **kwargs)
 
-    def _run_without_groupcol(self, x, colMeas, colFrame):
-        col_resc = f"{colMeas}.resc"
-        col_bin = f"{colMeas}.bin"
-        cols = [colMeas]
-        x = x.sort_values(colFrame)
+        # update the parameters
+        group_column = updated_kwargs.get("group_column", group_column)
+        measurement_column = updated_kwargs.get("measurement_column", measurement_column)
+        frame_column = updated_kwargs.get("frame_column", frame_column)
+
+        if group_column is None:
+            return self._run_without_groupcol(x, measurement_column, frame_column)
+        else:
+            return self._run_with_groupcol(x, group_column, measurement_column, frame_column)
+
+    def _run_without_groupcol(self, x, measurement_column, frame_column):
+        col_resc = f"{measurement_column}.resc"
+        col_bin = f"{measurement_column}.bin"
+        cols = [measurement_column]
+        x = x.sort_values(frame_column)
         data_np = x[cols].to_numpy()
 
-        if self.biasMet == "none":
-            rescaled_data = self._rescale_data(data_np, meas_index=0)
+        if self.bias_method == "none":
+            rescaled_data = self._rescale_data(data_np, measurement_index=0)
             binarized_data = self._bin_data(rescaled_data)
         else:
             warn("No detrending is performed, only rescaling. To run detrending, set colGroup.")
-            rescaled_data = self._rescale_data(data_np, meas_index=0)
+            rescaled_data = self._rescale_data(data_np, measurement_index=0)
             binarized_data = self._bin_data(rescaled_data)
 
         x[col_resc] = rescaled_data[:, 0]
         x[col_bin] = binarized_data[:, 0]
         return x
 
-    def _run_with_groupcol(self, x, colGroup, colMeas, colFrame):
-        col_resc = f"{colMeas}.resc"
-        col_bin = f"{colMeas}.bin"
-        col_fact = f'{colGroup}_factorized'
-        cols = [col_fact, colMeas]
-        x = x.sort_values([colGroup, colFrame])
+    def _run_with_groupcol(self, x, group_column, measurement_column, frame_column):
+        col_resc = f"{measurement_column}.resc"
+        col_bin = f"{measurement_column}.bin"
+        col_fact = f'{group_column}_factorized'
+        cols = [col_fact, measurement_column]
+        x = x.sort_values([group_column, frame_column])
         # factorize column in order to prevent numpy grouping error in detrending
-        value, label = x[colGroup].factorize()
+        value, _ = x[group_column].factorize()
         x[col_fact] = value
 
         data_np = x[cols].to_numpy()
 
-        if self.biasMet == "none":
-            rescaled_data = self._rescale_data(data_np, meas_index=1)
+        if self.bias_method == "none":
+            rescaled_data = self._rescale_data(data_np, measurement_index=1)
             detrended_data = self.detrend(rescaled_data, 0, 1)
             binarized_data = self._bin_data(detrended_data)
         else:

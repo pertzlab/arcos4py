@@ -33,6 +33,8 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
+from ..tools._arcos4py_deprecation import handle_deprecated_params
+
 TAB20 = [
     "#1f77b4",
     "#aec7e8",
@@ -62,47 +64,87 @@ class dataPlots:
 
     Attributes:
         data (Dataframe): containing ARCOS data.
-        frame (str): name of frame column in data.
-        measurement (str): name of measurement column in data.
-        id (str): name of track id column.
+        frame_column (str): name of frame column in data.
+        measurement_column (str): name of measurement column in data.
+        obj_id_column (str): name of track id column.
     """
 
-    def __init__(self, data: pd.DataFrame, frame: str, measurement: str, id: str):
+    def __init__(self, data: pd.DataFrame, frame_column: str, measurement_column: str, obj_id_column: str, **kwargs):
         """Plot different metrics such as histogram, position-t and density.
 
         Arguments:
             data (Dataframe): containing ARCOS data.
-            frame (str): name of frame column in data.
+            frame_column (str): name of frame column in data.
             measurement (str): name of measurement column in data.
             id (str): name of track id column.
+            **kwargs: Additional keyword arguments. Includes deprecated parameters.
+                - id (str): Deprecated. Use obj_id_column instead.
+                - frame (str): Deprecated. Use frame_column instead.
+                - measurement (str): Deprecated. Use measurement_column instead.
         """
-        self.data = data
-        self.id = id
-        self.frame = frame
-        self.measurement = measurement
+        map_deprecated_params = {
+            "id": "obj_id_column",
+            "frame": "frame_column",
+            "measurement": "measurement_column",
+        }
 
-    def position_t_plot(self, posCol: set[str] = {'x'}, n: int = 20) -> Union[plt.Figure, Any]:
+        # check allowed kwargs
+        allowed_kwargs = map_deprecated_params.keys()
+        for key in kwargs:
+            if key not in allowed_kwargs:
+                raise ValueError(f"Got an unexpected keyword argument '{key}'")
+
+        updated_kwargs = handle_deprecated_params(map_deprecated_params, **kwargs)
+
+        # Assigning the parameters
+        obj_id_column = updated_kwargs.get("obj_id_column", obj_id_column)
+        frame_column = updated_kwargs.get("frame_column", frame_column)
+        measurement_column = updated_kwargs.get("measurement_column", measurement_column)
+
+        self.data = data
+        self.obj_id = obj_id_column
+        self.frame_column = frame_column
+        self.measurement_column = measurement_column
+
+    def position_t_plot(self, position_columns: set[str] = {'x'}, n: int = 20, **kwargs) -> Union[plt.Figure, Any]:
         """Plots X and Y over T to visualize tracklength.
 
         Arguments:
-            posCol (set): containing names of position columns in data.
+            position_columns (set): containing names of position columns in data.
             n (int): number of samples to plot.
+            **kwargs: Additional keyword arguments. Includes deprecated parameters.
+                - posCol (set): Deprecated. Use position_columns instead.
 
         Returns:
             fig (matplotlib.figure.Figure): Matplotlib figure object of density plot.
             axes (matplotlib.axes.Axes): Matplotlib axes of density plot.
         """
-        sample = pd.Series(self.data[self.id].unique()).sample(n)
-        pd_from_r_df = self.data.loc[self.data[self.id].isin(sample)]
-        fig, axes = plt.subplots(1, len(posCol), figsize=(6, 3))
-        for _, df in pd_from_r_df.groupby(self.id):
-            for index, value in enumerate(posCol):
-                if len(posCol) > 1:
-                    df.plot(x=self.frame, y=value, ax=axes[index], legend=None)
+        map_deprecated_params = {
+            "posCol": "position_columns",
+        }
+
+        # check allowed kwargs
+        allowed_kwargs = map_deprecated_params.keys()
+        for key in kwargs:
+            if key not in allowed_kwargs:
+                raise ValueError(f"Got an unexpected keyword argument '{key}'")
+
+        updated_kwargs = handle_deprecated_params(map_deprecated_params, **kwargs)
+
+        # Assigning the parameters
+        position_columns = updated_kwargs.get("position_columns", position_columns)
+
+        sample = pd.Series(self.data[self.obj_id].unique()).sample(n)
+        pd_from_r_df = self.data.loc[self.data[self.obj_id].isin(sample)]
+        fig, axes = plt.subplots(1, len(position_columns), figsize=(6, 3))
+        for _, df in pd_from_r_df.groupby(self.obj_id):
+            for index, value in enumerate(position_columns):
+                if len(position_columns) > 1:
+                    df.plot(x=self.frame_column, y=value, ax=axes[index], legend=None)
                 else:
-                    df.plot(x=self.frame, y=value, ax=axes, legend=None)
-        if len(posCol) > 1:
-            for index, value in enumerate(posCol):
+                    df.plot(x=self.frame_column, y=value, ax=axes, legend=None)
+        if len(position_columns) > 1:
+            for index, value in enumerate(position_columns):
                 axes[index].set_title(value)
         else:
             axes.set_title(value)
@@ -121,7 +163,12 @@ class dataPlots:
             FacetGrid (seaborn.FacetGrid): Seaborn FacetGrid of density density plot.
         """
         plot = sns.displot(
-            self.data[self.measurement], kind="kde", palette="pastel", label=self.measurement, *args, **kwargs
+            self.data[self.measurement_column],
+            kind="kde",
+            palette="pastel",
+            label=self.measurement_column,
+            *args,
+            **kwargs,
         )
         # Plot formatting
         plt.legend(prop={'size': 10})
@@ -144,7 +191,7 @@ class dataPlots:
             AxesSubplot: Matplotlib AxesSubplot of histogram.
         """
         # Draw histogram
-        track_length = self.data.groupby(self.id).size()
+        track_length = self.data.groupby(self.obj_id).size()
         axes = sns.histplot(track_length, label="Track Length", bins=bins, *args, **kwargs)
         # Plot formatting
         plt.title('Track length Histogram')
@@ -158,10 +205,10 @@ class plotOriginalDetrended:
 
     Attributes:
         data (DataFrame): containing ARCOS data.
-        frame (str): name of frame column in data.
-        measurement (str): name of measurement column in data.
-        detrended (str): name of detrended column in data.
-        id (str): name of track id column.
+        frame_column (str): name of frame column in data.
+        measurement_column (str): name of measurement column in data.
+        detrended_column (str): name of detrended column in data.
+        obj_id_column (str): name of track id column.
         seed (int): seed for random number generator.
 
     Methods:
@@ -170,27 +217,56 @@ class plotOriginalDetrended:
         plot_original_and_detrended: plot original and detrended data.
     """
 
-    def __init__(self, data: pd.DataFrame, frame: str, measurement: str, detrended: str, id: str, seed: int = 42):
+    def __init__(
+        self,
+        data: pd.DataFrame,
+        frame_column: str,
+        measurement_column: str,
+        detrended_column: str,
+        obj_id_column: str,
+        seed: int = 42,
+        **kwargs,
+    ):
         """Constructs class with given parameters."""
+        map_deprecated_params = {
+            "id": "obj_id_column",
+            "frame": "frame_column",
+            "detrended": "detrended_column",
+            "measurement": "measurement_column",
+        }
+
+        # check allowed kwargs
+        allowed_kwargs = map_deprecated_params.keys()
+        for key in kwargs:
+            if key not in allowed_kwargs:
+                raise ValueError(f"Got an unexpected keyword argument '{key}'")
+
+        updated_kwargs = handle_deprecated_params(map_deprecated_params, **kwargs)
+
+        # Assigning the parameters
+        obj_id_column = updated_kwargs.get("obj_id_column", obj_id_column)
+        frame_column = updated_kwargs.get("frame_column", frame_column)
+        measurement_column = updated_kwargs.get("measurement_column", measurement_column)
+
         self.data = data
-        self.frame = frame
-        self.measurement = measurement
-        self.detrended = detrended
-        self.id = id
+        self.frame_column = frame_column
+        self.measurement_column = measurement_column
+        self.detrended_column = detrended_column
+        self.obj_id_column = obj_id_column
         self.seed = seed
 
     def _prepare_data(self, n_samples: int):
         rng_gen = np.random.default_rng(seed=self.seed)
-        vals = rng_gen.choice(self.data[self.id].unique(), n_samples, replace=False)  # noqa: F841
-        filtered_data = self.data.query(f"{self.id} in @vals")
-        return filtered_data.groupby(self.id)
+        vals = rng_gen.choice(self.data[self.obj_id_column].unique(), n_samples, replace=False)  # noqa: F841
+        filtered_data = self.data.query(f"{self.obj_id_column} in @vals")
+        return filtered_data.groupby(self.obj_id_column)
 
     def _plot_data(self, grouped, ncols, nrows, plotsize, plot_columns, labels, add_binary_segments=False):
         fig, axes2d = plt.subplots(nrows=nrows, ncols=ncols, figsize=plotsize, sharey=True)
         max_val = 0
         for (name, group), ax in zip(grouped, axes2d.flatten()):
             for column, label in zip(plot_columns, labels):
-                ax.plot(group[self.frame], group[column], label=label)
+                ax.plot(group[self.frame_column], group[column], label=label)
                 max_val = group[column].max() if group[column].max() > max_val else max_val
             ax.set_title(f"Track {name}")
 
@@ -207,7 +283,7 @@ class plotOriginalDetrended:
         return fig, axes2d
 
     def _add_binary_segments(self, group, ax, max_val):
-        x_val = group[group[f"{self.measurement}.bin"] != 0][self.frame]
+        x_val = group[group[f"{self.measurement_column}.bin"] != 0][self.frame_column]
         y_val = np.repeat(max_val, x_val.size)
         indices = np.where(np.diff(x_val) != 1)[0] + 1
         x_split = np.split(x_val, indices)
@@ -239,7 +315,7 @@ class plotOriginalDetrended:
         """
         grouped = self._prepare_data(n_samples)
         return self._plot_data(
-            grouped, subplots[0], subplots[1], plotsize, [self.detrended], ["detrended"], add_binary_segments
+            grouped, subplots[0], subplots[1], plotsize, [self.detrended_column], ["detrended"], add_binary_segments
         )
 
     def plot_original(
@@ -267,7 +343,7 @@ class plotOriginalDetrended:
             subplots[0],
             subplots[1],
             plotsize,
-            [self.measurement],
+            [self.measurement_column],
             ["original"],
             add_binary_segments,
         )
@@ -297,7 +373,7 @@ class plotOriginalDetrended:
             subplots[0],
             subplots[1],
             plotsize,
-            [self.measurement, self.detrended],
+            [self.measurement_column, self.detrended_column],
             ["original", "detrended"],
             add_binary_segments,
         )
@@ -354,12 +430,13 @@ class NoodlePlot:
     def __init__(
         self,
         df: pd.DataFrame,
-        colev: str,
-        trackid: str,
-        frame: str,
+        clid_column: str,
+        obj_id_column: str,
+        frame_column: str,
         posx: str,
         posy: str,
         posz: Union[str, None] = None,
+        **kwargs,
     ):
         """Constructs class with given parameters.
 
@@ -372,22 +449,70 @@ class NoodlePlot:
             posy (str): Name of the Y coordinate column in df.
             posz (str | None): Name of the Z coordinate column in df,
                 or None if no z column.
+            **kwargs: Additional keyword arguments for plot. Includes deprecated parameters.
+                - colev (str): Deprecated. Use clid_column instead.
+                - trackid (str): Deprecated. Use obj_id_column instead.
+                - frame (str): Deprecated. Use frame_column instead.
         """
+        map_deprecated_params = {
+            "colev": "clid_column",
+            "trackid": "obj_id_column",
+            "frame": "frame_column",
+        }
+
+        # allowed matplotlib kwargs
+        allowed_kwargs = [
+            "alpha",
+            "animated",
+            "c",
+            "label",
+            "linewidth",
+            "linestyle",
+            "marker",
+            "markersize",
+            "markeredgecolor",
+            "markerfacecolor",
+            "markerfacecoloralt",
+            "markeredgewidth",
+            "path_effects",
+            "picker",
+            "pickradius",
+            "solid_capstyle",
+            "solid_joinstyle",
+            "transform",
+            "visible",
+            "zorder",
+        ]
+
+        # check allowed kwargs
+        allowed_kwargs_2 = map_deprecated_params.keys()
+        for key in kwargs:
+            if key not in allowed_kwargs and key not in allowed_kwargs_2:
+                raise ValueError(f"Got an unexpected keyword argument '{key}'")
+
+        updated_kwargs = handle_deprecated_params(map_deprecated_params, **kwargs)
+
+        # Assigning the parameters
+        clid_column = updated_kwargs.pop("clid_column", clid_column)
+        obj_id_column = updated_kwargs.pop("obj_id_column", obj_id_column)
+        frame_column = updated_kwargs.pop("frame_column", frame_column)
+
         self.df = df
-        self.colev = colev
-        self.trackid = trackid
-        self.frame = frame
+        self.clid_column = clid_column
+        self.obj_id_column = obj_id_column
+        self.frame_column = frame_column
         self.posx = posx
         self.posy = posy
         self.posz = posz
+        self.plot_kwargs = updated_kwargs
 
     def _prepare_data_noodleplot(
         self,
         df: pd.DataFrame,
         color_cylce: list[str],
-        colev: str,
-        trackid: str,
-        frame: str,
+        clid_column: str,
+        obj_id_column: str,
+        frame_column: str,
         posx: str,
         posy: str,
         posz: Union[str, None] = None,
@@ -413,13 +538,13 @@ class NoodlePlot:
         """
         df = df.copy()
         # factorize trackid to get unique values and make sure they are nummeric
-        df[trackid] = df[trackid].factorize()[0]
+        df[obj_id_column] = df[obj_id_column].factorize()[0]
         # sort by collective event and trackid
-        df = df.sort_values([colev, trackid])
+        df = df.sort_values([clid_column, obj_id_column])
         if posz:
-            array = df[[colev, trackid, frame, posx, posy, posz]].to_numpy()
+            array = df[[clid_column, obj_id_column, frame_column, posx, posy, posz]].to_numpy()
         else:
-            array = df[[colev, trackid, frame, posx, posy]].to_numpy()
+            array = df[[clid_column, obj_id_column, frame_column, posx, posy]].to_numpy()
         # generate goroups for each unique value
         grouped_array = np.split(array, np.unique(array[:, 0], axis=0, return_index=True)[1][1:])
         # make collids sequential
@@ -449,6 +574,7 @@ class NoodlePlot:
                 dat[:, 2],
                 dat[:, self.projection_index],
                 c=colors[int(dat[0, -1])],
+                **self.plot_kwargs,
             )
         return fig, ax
 
@@ -477,7 +603,14 @@ class NoodlePlot:
         elif projection_axis == self.posz:
             self.projection_index = 5
         grpd_data, colors = self._prepare_data_noodleplot(
-            self.df, color_cylce, self.colev, self.trackid, self.frame, self.posx, self.posy, self.posz
+            self.df,
+            color_cylce,
+            self.clid_column,
+            self.obj_id_column,
+            self.frame_column,
+            self.posx,
+            self.posy,
+            self.posz,
         )
         fig, axes = self._create_noodle_plot(grpd_data, colors)
         return fig, axes

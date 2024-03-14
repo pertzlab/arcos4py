@@ -39,7 +39,7 @@ def test_shuffle_tracks():
     )
 
     # Test the function with a specific seed
-    df_new = shuffle_tracks(test_df, object_id_name='track_id', frame_column='t', seed=42)
+    df_new = shuffle_tracks(test_df, object_id_column='track_id', frame_column='t', seed=42)
 
     # Assert that the output is as expected
     assert df_new['track_id'].to_list() == [1, 1, 1, 2, 2, 2]

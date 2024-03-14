@@ -120,14 +120,14 @@ def test_calculate_statistics_per_frame():
             'y': [0, 1, 1],
         }
     )
-    result = calculate_statistics_per_frame(data, 'frame_column', 'collid_column', pos_columns=['x', 'y'])
+    result = calculate_statistics_per_frame(data, 'frame_column', 'collid_column', position_columns=['x', 'y'])
     assert 'centroid_x' in result.columns
     assert 'centroid_y' in result.columns
     assert result.loc[result['frame_column'] == 1, 'centroid_x'].values[0] == 0.5
     assert result.loc[result['frame_column'] == 1, 'centroid_y'].values[0] == 0.5
 
     # Test 4: Verify correct calculation of spatial extent and convex hull area
-    result = calculate_statistics_per_frame(data, 'frame_column', 'collid_column', pos_columns=['x', 'y'])
+    result = calculate_statistics_per_frame(data, 'frame_column', 'collid_column', position_columns=['x', 'y'])
     assert 'spatial_extent' in result.columns
     assert 'convex_hull_area' in result.columns
     assert (
@@ -144,7 +144,7 @@ def test_calculate_statistics_per_frame():
             'y': [0, 1, 1, 2],
         }
     )
-    result = calculate_statistics_per_frame(data, 'frame_column', 'collid_column', pos_columns=['x', 'y'])
+    result = calculate_statistics_per_frame(data, 'frame_column', 'collid_column', position_columns=['x', 'y'])
     assert 'direction' in result.columns
     assert 'centroid_speed' in result.columns
     assert result.loc[result['frame_column'] == 2, 'direction'].values[0] == pytest.approx(np.arctan2(1, 1), rel=1e-5)
@@ -161,7 +161,7 @@ def test_calculate_statistics_per_frame():
             'y': [0],
         }
     )
-    result = calculate_statistics_per_frame(data, 'frame_column', 'collid_column', pos_columns=['x', 'y'])
+    result = calculate_statistics_per_frame(data, 'frame_column', 'collid_column', position_columns=['x', 'y'])
     assert result.loc[result['frame_column'] == 1, 'spatial_extent'].values[0] == 0
     assert result.loc[result['frame_column'] == 1, 'convex_hull_area'].values[0] == 0
 
@@ -174,5 +174,5 @@ def test_calculate_statistics_per_frame():
             'y': [0, 1],
         }
     )
-    result = calculate_statistics_per_frame(data, 'frame_column', 'collid_column', pos_columns=['x', 'y'])
+    result = calculate_statistics_per_frame(data, 'frame_column', 'collid_column', position_columns=['x', 'y'])
     assert result.loc[result['frame_column'] == 1, 'convex_hull_area'].values[0] == 0

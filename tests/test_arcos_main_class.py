@@ -12,9 +12,9 @@ def test_init():
 
     arcos = ARCOS(data)
     assert arcos.data.equals(data)
-    assert arcos.posCols == ['x']
+    assert arcos.position_columns == ['x']
     assert arcos.frame_column == 'time'
-    assert arcos.id_column == 'id'
+    assert arcos.obj_id_column == 'id'
     assert arcos.measurement_column == 'meas'
     assert arcos.clid_column == 'clTrackID'
     assert arcos.n_jobs == 1
@@ -76,7 +76,7 @@ def test_clip_meas():
     high_value = data['meas'].quantile(clip_high)
 
     # Run clipping method with specified quantiles
-    clipped_data = arcos.clip_meas(clip_low=clip_low, clip_high=clip_high)
+    clipped_data = arcos.clip_measurements(clip_low=clip_low, clip_high=clip_high)
 
     # Check if the clipping worked as expected
     assert all(clipped_data['meas'] >= low_value), "Values below the lower bound were not clipped"
@@ -88,9 +88,14 @@ def test_trackCollev():
     df_true = pd.read_csv('tests/testdata/1central_res.csv')
     pos = ['x']
     ts = ARCOS(
-        df_in, posCols=pos, frame_column='time', id_column='trackID', measurement_column='m', clid_column='clTrackID'
+        df_in,
+        position_columns=pos,
+        frame_column='time',
+        obj_id_column='trackID',
+        measurement_column='m',
+        clid_column='clTrackID',
     )
-    ts.bin_col = 'm'
-    out = ts.trackCollev(eps=1, minClsz=1, nPrev=1)
+    ts.binarized_measurement_column = 'm'
+    out = ts.track_collective_events(eps=1, min_clustersize=1, n_prev=1)
     out = out.drop(columns=['m', 'x'])
     pd.testing.assert_frame_equal(out, df_true, check_dtype=False, check_like=True)

@@ -13,6 +13,8 @@ from tqdm import tqdm
 if TYPE_CHECKING:
     import numpy.typing as npt
 
+from ..tools._arcos4py_deprecation import handle_deprecated_params
+
 
 def _np_diff(arr: list[np.ndarray], axis: int):
     return [np.cumsum(np.diff(np.insert(i, 0, i[0], axis=0), axis=0), axis=0) for i in arr]
@@ -40,13 +42,13 @@ def _get_xy_change(X: np.ndarray, object_ids: np.ndarray) -> tuple[pd.DataFrame,
 
 
 def shuffle_tracks(
-    df: pd.DataFrame, object_id_name: str = 'track_id', posCols: list = ['x', 'y'], frame_column='t', seed=42
+    df: pd.DataFrame, object_id_column: str = 'track_id', positoin_column: list = ['x', 'y'], frame_column='t', seed=42
 ) -> pd.DataFrame:
     """Resample tracks by switching the first timepoint\
         positions of two tracks and then propagating the cummulative difference."""
-    df.sort_values([object_id_name, frame_column], inplace=True)  # needs to be sorted for _get_xy_change to work
-    df_pos_cols_np = df[posCols].to_numpy()
-    factorized_oid, uniques = pd.factorize(df[object_id_name])
+    df.sort_values([object_id_column, frame_column], inplace=True)  # needs to be sorted for _get_xy_change to work
+    df_pos_cols_np = df[positoin_column].to_numpy()
+    factorized_oid, _ = pd.factorize(df[object_id_column])
 
     # Set the random seed
     rng = np.random.default_rng(seed)
@@ -92,13 +94,13 @@ def shuffle_tracks(
         df_pos_cols_np[random_track_rows] += xy_change[random_track_rows]
         switched_tracks.add(random_track_id)
     df_out = df.copy(deep=True)
-    df_out[posCols] = df_pos_cols_np
+    df_out[positoin_column] = df_pos_cols_np
     return df_out
 
 
 def shuffle_timepoints(
     df: pd.DataFrame,
-    objet_id_name: str = 'track_id',
+    objet_id_column: str = 'track_id',
     frame_column: str = 'time',
     seed=42,
 ) -> pd.DataFrame:
@@ -107,7 +109,7 @@ def shuffle_timepoints(
     # Set the random seed
     rng = np.random.default_rng(seed)
     # Get unique track IDs
-    track_ids = df_new[objet_id_name].factorize()[0]
+    track_ids = df_new[objet_id_column].factorize()[0]
     unique_track_ids = np.unique(track_ids)
 
     # get timepoints
@@ -123,7 +125,7 @@ def shuffle_timepoints(
         df_t_np[track_rows] = df_t_shuffle
 
     df_new[frame_column] = df_t_np
-    df_new.sort_values(by=[objet_id_name, frame_column], inplace=True)
+    df_new.sort_values(by=[objet_id_column, frame_column], inplace=True)
     return df_new
 
 
@@ -139,16 +141,21 @@ def _get_activity_blocks(data: np.ndarray) -> list[np.ndarray]:
 
 
 def shuffle_activity_bocks_per_trajectory(
-    df: pd.DataFrame, objet_id_name: str, frame_column: str, meas_column: str, seed=42, alternating_blocks=True
+    df: pd.DataFrame,
+    object_id_column: str,
+    frame_column: str,
+    measurement_column: str,
+    seed=42,
+    alternating_blocks=True,
 ) -> pd.DataFrame:
     """Resample data by shuffling the activity blocks of a binary activity column on a per trajectory basis."""
     df_new = df.copy(deep=True)
     # check if data in meas_column is binary
-    if not np.array_equal(np.unique(df_new[meas_column]), np.array([0, 1])):
+    if not np.array_equal(np.unique(df_new[measurement_column]), np.array([0, 1])):
         raise ValueError('Data in meas_column must be binary')
 
     # raise warning if 1 makes up more than 25% of the array
-    if np.sum(df_new[meas_column]) / df_new[meas_column].size > 0.25:
+    if np.sum(df_new[measurement_column]) / df_new[measurement_column].size > 0.25:
         warnings.warn(
             'More than 25%% of the data in meas_column is 1.\
             This could impact the validity of this resampling approach.'
@@ -157,13 +164,13 @@ def shuffle_activity_bocks_per_trajectory(
     # Set the random seed
     rng = np.random.default_rng(seed)
     # Get unique track IDs
-    track_ids = df_new[objet_id_name].unique()
+    track_ids = df_new[object_id_column].unique()
     # Iterate over the unique track IDs
     for track_id in track_ids:
         # Get the rows with the current track ID
-        track_rows = df_new[df_new[objet_id_name] == track_id].copy()
+        track_rows = df_new[df_new[object_id_column] == track_id].copy()
         # Get the activity blocks
-        meas_array = track_rows[meas_column].to_numpy()
+        meas_array = track_rows[measurement_column].to_numpy()
         activity_blocks = _get_activity_blocks(meas_array)
         # if alternating blocks is True, group the activity blocks by its value,
         # then suffle them separately and alternate them
@@ -191,14 +198,14 @@ def shuffle_activity_bocks_per_trajectory(
             # Shuffle the activity blocks
             rng.shuffle(activity_blocks)
         # Set the shuffled activity blocks
-        df_new.loc[track_rows.index, meas_column] = np.concatenate(activity_blocks)
-    df_new.sort_values(by=[frame_column, objet_id_name], inplace=True)
+        df_new.loc[track_rows.index, measurement_column] = np.concatenate(activity_blocks)
+    df_new.sort_values(by=[frame_column, object_id_column], inplace=True)
     return df_new
 
 
 def shuffle_coordinates_per_timepoint(
     df: pd.DataFrame,
-    posCols: list = ['x', 'y'],
+    position_columns: list = ['x', 'y'],
     frame_column: str = 'time',
     seed=42,
 ) -> pd.DataFrame:
@@ -211,7 +218,7 @@ def shuffle_coordinates_per_timepoint(
     unique_timepoints = np.unique(timepoints)
 
     # get coordinates
-    df_tp_col_np = df_new[posCols].to_numpy()
+    df_tp_col_np = df_new[position_columns].to_numpy()
     # Iterate over the unique track IDs
     for tp in unique_timepoints:
         # Get the rows with the current track ID
@@ -222,17 +229,19 @@ def shuffle_coordinates_per_timepoint(
         rng.shuffle(df_pos_shuffle)
         df_tp_col_np[tp_rows] = df_pos_shuffle
 
-    df_new[posCols] = df_tp_col_np
+    df_new[position_columns] = df_tp_col_np
     return df_new
 
 
-def shift_timepoints_per_trajectory(df: pd.DataFrame, objet_id_name: str, frame_column: str, seed=42) -> pd.DataFrame:
+def shift_timepoints_per_trajectory(
+    df: pd.DataFrame, object_id_column: str, frame_column: str, seed=42
+) -> pd.DataFrame:
     """Resample data by shifting the timepoints a random ammount of a trajectory on a per trajectory basis."""
     df_new = df.copy(deep=True)
     # Set the random seed
     rng = np.random.default_rng(seed)
     # Get unique track IDs
-    track_ids = df_new[objet_id_name].factorize()[0]
+    track_ids = df_new[object_id_column].factorize()[0]
     unique_track_ids = np.unique(track_ids)
 
     # get timepoints
@@ -249,16 +258,16 @@ def shift_timepoints_per_trajectory(df: pd.DataFrame, objet_id_name: str, frame_
         timepoints = np.roll(timepoints, shift)
         df_t_np[track_rows] = timepoints
 
-    df_new.sort_values(by=[objet_id_name, frame_column], inplace=True)
+    df_new.sort_values(by=[object_id_column, frame_column], inplace=True)
     return df_new
 
 
 def resample_data(  # noqa: C901
     data: pd.DataFrame,
-    posCols: list,
+    position_columns: list,
     frame_column: str,
-    id_column: str,
-    meas_column: Union[str, None] = None,
+    obj_id_column: str,
+    measurement_column: Union[str, None] = None,
     method: Union[str, list[str]] = 'shuffle_tracks',
     n=100,
     seed=42,
@@ -266,16 +275,17 @@ def resample_data(  # noqa: C901
     max_tries=100,
     show_progress=True,
     verbose=False,
-    paralell_processing=True,
+    parallel_processing=True,
+    **kwargs,
 ) -> pd.DataFrame:
     """Resamples data in order to perform bootstrapping analysis.
 
     Arguments:
         data (pd.Dataframe): The data to resample.
-        posCols (list): The columns to use for the position.
+        position_columns (list): The columns to use for the position.
         frame_column (str): The column to use for the frame.
-        id_column (str): The column to use for the object ID.
-        meas_column (str, optional): The column to use for the measurement.
+        obj_id_column (str): The column to use for the object ID.
+        measurement_column (str, optional): The column to use for the measurement.
             Only needed for 'activity_blocks_shuffle'. Defaults to None.
         method (str, optional): The method to use for resampling. Defaults to 'shuffle_tracks'.
             Available methods are: "shuffle_tracks", 'shuffle_timepoints',
@@ -287,20 +297,45 @@ def resample_data(  # noqa: C901
         max_tries (int, optional): The maximum number of tries to try ot generate unique data
             when allow_duplicates is set to True. Defaults to 100.
         verbose (bool, optional): Whether to print progress. Defaults to False.
+        parallel_processing (bool, optional): Whether to use parallel processing. Defaults to True.
+        **kwargs: Additional keyword arguments. Includes deprecated parameters.
+            - posCols (list): Deprecated. Use position_columns instead.
+            - id_column (str): Deprecated. Use obj_id_column instead.
+            - meas_column (str): Deprecated. Use measurement_column instead.
+            - paralell_processing (bool): Deprecated. Use parallel_processing instead.
 
     Returns:
         pd.DataFrame: The resampled data.
     """
+    map_deprecated_params = {
+        "posCols": "position_columns",
+        "id_column": "obj_id_column",
+        "meas_column": "measurement_column",
+        "paralell_processing": "parallel_processing",
+    }
+
+    # check allowed kwargs
+    allowed_kwargs = map_deprecated_params.keys()
+    for key in kwargs:
+        if key not in allowed_kwargs:
+            raise ValueError(f"Got an unexpected keyword argument '{key}'")
+    updated_kwargs = handle_deprecated_params(map_deprecated_params, **kwargs)
+
+    position_columns = updated_kwargs.get("position_columns", position_columns)
+    obj_id_column = updated_kwargs.get("obj_id_column", obj_id_column)
+    measurement_column = updated_kwargs.get("measurement_column", measurement_column)
+    parallel_processing = updated_kwargs.get("parallel_processing", parallel_processing)
+
     # validate the input
     if not isinstance(data, pd.DataFrame):
         raise TypeError('data must be a pandas.DataFrame')
-    if not isinstance(posCols, list):
+    if not isinstance(position_columns, list):
         raise TypeError('posCols must be a list')
     if not isinstance(frame_column, str):
         raise TypeError('frame_column must be a string')
-    if not isinstance(id_column, str):
+    if not isinstance(obj_id_column, str):
         raise TypeError('id_column must be a string')
-    if not isinstance(meas_column, str) and meas_column is not None:
+    if not isinstance(measurement_column, str) and measurement_column is not None:
         raise TypeError('meas_column must be a string or None')
     if not isinstance(method, str) and not isinstance(method, list):
         raise TypeError('method must be a string or list')
@@ -310,10 +345,10 @@ def resample_data(  # noqa: C901
         raise TypeError('seed must be an integer')
     if not isinstance(verbose, bool):
         raise TypeError('verbose must be a boolean')
-    if not isinstance(paralell_processing, bool):
+    if not isinstance(parallel_processing, bool):
         raise TypeError('paralell_processing must be a boolean')
 
-    if len(posCols) < 1:
+    if len(position_columns) < 1:
         raise ValueError('posCols must contain at least one column')
     if n < 1:
         raise ValueError('n must be a positive integer')
@@ -329,11 +364,11 @@ def resample_data(  # noqa: C901
     }
 
     function_args: dict[str, tuple] = {
-        'shuffle_tracks': (id_column, posCols, frame_column),
-        'shuffle_timepoints': (id_column, frame_column),
-        'shift_timepoints': (id_column, frame_column),
-        'shuffle_binary_blocks': (id_column, frame_column, meas_column),
-        'shuffle_coordinates_timepoint': (posCols, frame_column),
+        'shuffle_tracks': (obj_id_column, position_columns, frame_column),
+        'shuffle_timepoints': (obj_id_column, frame_column),
+        'shift_timepoints': (obj_id_column, frame_column),
+        'shuffle_binary_blocks': (obj_id_column, frame_column, measurement_column),
+        'shuffle_coordinates_timepoint': (position_columns, frame_column),
     }
 
     resampling_func_list = []
@@ -348,14 +383,14 @@ def resample_data(  # noqa: C901
     for method in methods:
         if method not in method_dict.keys():
             raise ValueError(f'method must be one of {method_dict.keys()}')
-        if method == 'shuffle_binary_blocks' and meas_column is None:
+        if method == 'shuffle_binary_blocks' and measurement_column is None:
             raise ValueError('meas_column must be set for binary_blocks_shuffle')
 
     # Check if the columns are in the data
     if 'shuffle_binary_blocks' in methods:
-        relevant_columns = posCols + [frame_column, id_column, meas_column]
+        relevant_columns = position_columns + [frame_column, obj_id_column, measurement_column]
     else:
-        relevant_columns = posCols + [frame_column, id_column]
+        relevant_columns = position_columns + [frame_column, obj_id_column]
 
     for i in relevant_columns:
         if i not in data.columns:
@@ -364,14 +399,14 @@ def resample_data(  # noqa: C901
     # check if there are any Nan in the columns selected
     na_cols = []
     for i in relevant_columns:
-        if data[posCols].isnull().values.any():
+        if data[position_columns].isnull().values.any():
             na_cols.append(i)
     if na_cols:
         warnings.warn(f'NaN values in {na_cols}, default behaviour is to drop these rows')
         data.dropna(subset=na_cols, inplace=True)
 
     # Sort the data
-    data.sort_values([id_column, frame_column], inplace=True)
+    data.sort_values([obj_id_column, frame_column], inplace=True)
 
     rng = np.random.default_rng(seed)
     # create a list of random numbers between 0 and 1000000
@@ -385,7 +420,7 @@ def resample_data(  # noqa: C901
     for method in methods:
         resampling_func_list.append(method_dict[method])
     iter_range = range(1, n + 1)
-    if paralell_processing:
+    if parallel_processing:
         from joblib import Parallel, delayed
 
         # iterate over the number of resamples
