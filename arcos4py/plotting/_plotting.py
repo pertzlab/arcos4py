@@ -75,9 +75,9 @@ class dataPlots:
         Arguments:
             data (Dataframe): containing ARCOS data.
             frame_column (str): name of frame column in data.
-            measurement (str): name of measurement column in data.
-            id (str): name of track id column.
-            **kwargs: Additional keyword arguments. Includes deprecated parameters.
+            measurement_column (str): name of measurement column in data.
+            obj_id_column (str): name of track id column.
+            **kwargs (Any): Additional keyword arguments. Includes deprecated parameters.
                 - id (str): Deprecated. Use obj_id_column instead.
                 - frame (str): Deprecated. Use frame_column instead.
                 - measurement (str): Deprecated. Use measurement_column instead.
@@ -112,7 +112,7 @@ class dataPlots:
         Arguments:
             position_columns (set): containing names of position columns in data.
             n (int): number of samples to plot.
-            **kwargs: Additional keyword arguments. Includes deprecated parameters.
+            **kwargs (Any): Additional keyword arguments. Includes deprecated parameters.
                 - posCol (set): Deprecated. Use position_columns instead.
 
         Returns:
@@ -442,14 +442,14 @@ class NoodlePlot:
 
         Arguments:
             df (pd.DataFrame): DataFrame containing collective events from arcos.
-            colev (str): Name of the collective event column in df.
-            trackid (str): Name of the track column in df.
-            frame (str): Name of the frame column in df.
+            clid_column (str): Name of the collective event column in df.
+            obj_id_column (str): Name of the track column in df.
+            frame_column (str): Name of the frame column in df.
             posx (str): Name of the X coordinate column in df.
             posy (str): Name of the Y coordinate column in df.
             posz (str | None): Name of the Z coordinate column in df,
                 or None if no z column.
-            **kwargs: Additional keyword arguments for plot. Includes deprecated parameters.
+            **kwargs (Any): Additional keyword arguments for plot. Includes deprecated parameters.
                 - colev (str): Deprecated. Use clid_column instead.
                 - trackid (str): Deprecated. Use obj_id_column instead.
                 - frame (str): Deprecated. Use frame_column instead.

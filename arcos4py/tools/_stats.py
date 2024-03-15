@@ -30,7 +30,7 @@ def calculate_statistics_per_frame(
         frame_column (str): The column name representing the frame numbers.
         clid_column (str): The column name representing the collective event IDs.
         position_columns (List[str], optional): List of column names representing the position coordinates. Defaults to None.
-        **kwargs: Additional keyword arguments. Includes deprecated parameters.
+        **kwargs (Any): Additional keyword arguments. Includes deprecated parameters.
             - collid_column (str): Deprecated. Use clid_column instead.
             - pos_columns (List[str], optional): Deprecated. Use position_columns instead.
 
@@ -154,10 +154,10 @@ def calculate_statistics(
     Arguments:
         data (pd.DataFrame): Input data containing information on the collective events.
         frame_column (str): The column name representing the frame numbers.
-        collid_column (str): The column name representing the collective event IDs.
+        clid_column (str): The column name representing the collective event IDs.
         obj_id_column (str, optional): The column name representing the object IDs. Defaults to None.
-        pos_columns (List[str], optional): List of column names representing the position coordinates. Defaults to None.
-        **kwargs: Additional keyword arguments. Includes deprecated parameters.
+        position_columns (List[str], optional): List of column names representing the position coordinates. Defaults to None.
+        **kwargs (Any): Additional keyword arguments. Includes deprecated parameters.
             - collid_column (str): Deprecated. Use clid_column instead.
             - pos_columns (List[str], optional): Deprecated. Use position_columns instead.
 

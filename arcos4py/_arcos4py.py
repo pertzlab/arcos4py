@@ -78,7 +78,7 @@ class ARCOS:
             measurement_column (str): Indicating the measurement column in input_data.
             clid_column (str): Indicating the column name containing the collective event ids.
             n_jobs (str): Number of workers to spawn, -1 uses all available cpus.
-            kwargs: Additional keyword arguments. Includes old parameter names for backwards compatibility.
+            kwargs (Any): Additional keyword arguments. Includes old parameter names for backwards compatibility.
                 - posCols: List containing position column names strings inside data e.g.
         """
         # allowed kwargs
@@ -206,7 +206,7 @@ class ARCOS:
             polynomial_degree (int): Sets the degree of the polynomial for lm fitting.
             bias_method (str): De-trending method, one of ['runmed', 'lm', 'none'].
                 If no id_column is provided, only 'none' is allowed.
-            **kwargs: Additional keyword arguments. Includes old parameter names for backwards compatibility.
+            **kwargs (Any): Additional keyword arguments. Includes old parameter names for backwards compatibility.
                 - smoothK: Size of the short-term median smoothing filter.
                 - biasK: Size of the long-term de-trending median filter
                 - peakThr: Threshold for rescaling of the de-trended signal.
@@ -288,7 +288,7 @@ class ARCOS:
                 point to be considered as a core point. This includes the point itself.
                 Only used if clustering_method is 'hdbscan'. If None, min_samples =  min_clustersize.
             linking_method (str): Linking method, one of ['nearest', 'transportation'].
-            **kwargs: Additional keyword arguments. Includes old parameter names for backwards compatibility.
+            **kwargs (Any): Additional keyword arguments. Includes old parameter names for backwards compatibility.
                 - epsPrev: Frame to frame distance, value is used to connect
                     collective events across multiple frames.
                 - minClsz: The minimum size for a cluster to be identified as a collective event
@@ -344,7 +344,7 @@ class ARCOS:
                 point to be considered as a core point. This includes the point itself.
                 Only used if clustering_method is 'hdbscan'. If None, min_samples =  min_clustersize.
             linking_method (str): Linking method, one of ['nearest', 'transportation'].
-            **kwargs: Additional keyword arguments. Includes old parameter names for backwards compatibility.
+            **kwargs (Any): Additional keyword arguments. Includes old parameter names for backwards compatibility.
                 - epsPrev: Frame to frame distance, value is used to connect
                     collective events across multiple frames.
                 - minClsz: The minimum size for a cluster to be identified as a collective event

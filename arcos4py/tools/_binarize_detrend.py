@@ -22,15 +22,17 @@ from ..tools._arcos4py_deprecation import handle_deprecated_params
 
 class detrender:
     """Smooth and de-trend input data.
+
     First, a short-term median filter with size smooth_k is applied
     to remove fast noise from the time series. smooth_k is applied
     The subsequent de-trending can be performed with a long-term median filter
     with the size bias_k {bias_method = "runmed"}
     or by fitting a polynomial of degree polynomial_degree {bias_method = "lm"}.
+
     Attributes:
         smooth_k (int): Representing the size of the short-term median smoothing filter.
         bias_k (int): Representing the size of the long-term de-trending median filter.
-        peak_threshold (float): Threshold for rescaling of the de-trended signal.ian filter.
+        peak_threshold (float): Threshold for rescaling of the de-trended signal.
         polynomial_degree (int): Sets the degree of the polynomial for lm fitting..
         bias_method (str): Indicating de-trending method, one of ['runmed', 'lm', 'none'].
         n_jobs (int): Number of paralell workers to spawn, -1 uses all available cpus.biasMet (str):
@@ -245,7 +247,7 @@ class binData(detrender):
                 If None, no detrending is performed, only rescaling and bias method is ignored.
             measurement_column (str): Measurement column in x on which detrending and rescaling is performed.
             frame_column (str): Frame column in Time-series data. Used for sorting.
-            **kwargs: Additional keyword arguments. Includes old parameters for backwards compatibility.
+            **kwargs (Any): Additional keyword arguments. Includes old parameters for backwards compatibility.
                 - GroupCol (str): Object id column in x. Detrending and rescaling is performed on a per-object basis.
                 - colMeas (str): Measurement column in x on which detrending and rescaling is performed.
                 - colFrame (str): Frame column in Time-series data. Used for sorting.

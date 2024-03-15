@@ -52,25 +52,25 @@ def bootstrap_arcos(
 
     Arguments:
         df: DataFrame containing the data to be bootstrapped.
-        posCols: List of column names containing the x and y coordinates.
+        position_columns: List of column names containing the x and y coordinates.
         frame_column: Name of the column containing the frame number.
-        id_column: Name of the column containing the track id.
-        meas_column: Name of the column containing the measurement.
+        obj_id_column: Name of the column containing the track id.
+        measurement_column: Name of the column containing the measurement.
         method: Method used for bootstrapping. Can be "shuffle_tracks", 'shuffle_timepoints', 'shift_timepoints',
             'shuffle_binary_blocks', 'shuffle_coordinates_timepoint or a list of methods,
             which will be applied in order of index.
-        smoothK: Smoothing kernel size.
-        biasK: Bias kernel size.
-        peakThr: Threshold for peak detection.
-        binThr: Threshold for binarization.
-        polyDeg: Degree of the polynomial used for bias correction.
-        biasMet: Bias correction method. Can be 'none', 'runmed', 'lm'
+        smooth_k: Smoothing kernel size.
+        bias_k: Bias kernel size.
+        peak_threshold: Threshold for peak detection.
+        binarization_threshold: Threshold for binarization.
+        polynomial_degree: Degree of the polynomial used for bias correction.
+        bias_method: Bias correction method. Can be 'none', 'runmed', 'lm'
         eps: Epsilon parameter for DBSCAN.
-        epsPrev: Parameter for linking tracks. If None, eps is used.
-        minClsz: Minimum cluster size.
-        nPrev: Number of previous frames to consider for linking.
+        eps_prev: Parameter for linking tracks. If None, eps is used.
+        min_clustersize: Minimum cluster size.
+        n_prev: Number of previous frames to consider for linking.
         min_duration: Minimum duration of a track.
-        min_size: Minimum size of a track.
+        min_total_size: Minimum size of a track.
         stats_metric: Metric to calculate. Can be "duration", "total_size", "min_size", "max_size" or a list of metrics.
             Default is ["duration", "total_size"].
         pval_alternative: Alternative hypothesis for the p-value calculation. Can be "less" or "greater".
@@ -82,7 +82,9 @@ def bootstrap_arcos(
         max_tries: Maximum number of tries to resample data without duplicates.
         show_progress: Show a progress bar.
         verbose: Print additional information.
-        **kwargs: Additional keyword arguments. Includes deprecated parameters.
+        parallel_processing: Use parallel processing.
+        plot: Plot the distribution of the bootstrapped data.
+        **kwargs (Any): Additional keyword arguments. Includes deprecated parameters.
             - id_column: Deprecated. Use obj_id_column instead.
             - meas_column: Deprecated. Use measurement_column instead.
             - smoothK: Deprecated. Use smooth_k instead.
@@ -187,7 +189,7 @@ def bootstrap_arcos(
         smooth_k=smooth_k,
         bias_k=bias_k,
         peak_threshold=peak_threshold,
-        binarize_threshold=binarization_threshold,
+        binarization_threshold=binarization_threshold,
         polynomial_degree=polynomial_degree,
         bias_method=bias_method,
         eps=eps,
@@ -285,7 +287,7 @@ def calculate_arcos_stats(
     smooth_k: int = 3,
     bias_k: int = 51,
     peak_threshold: float = 0.2,
-    binarize_threshold: float = 0.1,
+    binarization_threshold: float = 0.1,
     polynomial_degree: int = 1,
     bias_method: str = "runmed",
     eps: float = 2,
@@ -305,26 +307,38 @@ def calculate_arcos_stats(
     Arguments:
         df_resampled (DataFrame): Dataframe with resampled data.
         iterations (list[int]): List of iteration names, or range.
-        posCols (list): List of position columns..
+        position_columns (list): List of position columns..
         frame_column (str): Name of the frame column.
-        id_column (str): Name of the id column.
-        meas_column (str): Name of the measurement column.
-        smoothK (int, optional): Smoothing kernel size for local detrending. Defaults to 3.
-        biasK (int, optional): Bias kernel size for large scale detrending (used with biasMet='runmed'). Defaults to 51.
-        peakThr (float, optional): Peak threshold used for rescaling (used with biasMet='runmed'). Defaults to 0.2.
-        binThr (float, optional): Threshold for binarizing measurements after detrending. Defaults to 0.1.
-        polyDeg (int, optional): Polynomial degree used for detrending (used with biasMet='lm'). Defaults to 1.
-        biasMet (str, optional): Bias method, can be 'none', 'runmed', 'lm'. Defaults to "runmed".
+        obj_id_column (str): Name of the id column.
+        measurement_column (str): Name of the measurement column.
+        smooth_k (int, optional): Smoothing kernel size for local detrending. Defaults to 3.
+        bias_k (int, optional): Bias kernel size for large scale detrending (used with biasMet='runmed'). Defaults to 51.
+        peak_threshold (float, optional): Peak threshold used for rescaling (used with biasMet='runmed'). Defaults to 0.2.
+        binarization_threshold (float, optional): Threshold for binarizing measurements after detrending. Defaults to 0.1.
+        polynomial_degree (int, optional): Polynomial degree used for detrending (used with biasMet='lm'). Defaults to 1.
+        bias_method (str, optional): Bias method, can be 'none', 'runmed', 'lm'. Defaults to "runmed".
         eps (float, optional): Epsilon used for culstering active entities. Defaults to 2.
-        epsPrev (int, optional): Epsilon used for linking together culsters across time. Defaults to None.
-        minClsz (int, optional): Minimum cluster size. Defaults to 1.
-        nPrev (int, optional): Number of previous frames to consider when tracking clusters. Defaults to 1.
+        eps_prev (int, optional): Epsilon used for linking together culsters across time. Defaults to None.
+        min_clustersize (int, optional): Minimum cluster size. Defaults to 1.
+        n_prev (int, optional): Number of previous frames to consider when tracking clusters. Defaults to 1.
         min_duration (int, optional): Minimum duration of detected event. Defaults to 1.
-        min_size (int, optional): Minimum size, minimum size of detected event. Defaults to 1.
+        min_total_size (int, optional): Minimum size, minimum size of detected event. Defaults to 1.
         stats_metric (list[str], optional): List of metrics to calculate. Defaults to ['duration', 'total_size'].
         show_progress (bool, optional): Show progress bar. Defaults to True.
-        paralell_processing (bool, optional): Use paralell processing, uses the joblib package. Defaults to True.
-        clid_name (str, optional): Name of the cluster id column. Defaults to 'clid'.
+        parallel_processing (bool, optional): Use paralell processing, uses the joblib package. Defaults to True.
+        clid_column (str, optional): Name of the cluster id column. Defaults to 'clid'.
+        **kwargs (Any): Additional keyword arguments. Includes deprecated parameters.
+            - posCols: Deprecated. Use position_columns instead.
+            - id_column: Deprecated. Use obj_id_column instead.
+            - meas_column: Deprecated. Use measurement_column instead.
+            - smoothK: Deprecated. Use smooth_k instead.
+            - biasK: Deprecated. Use bias_k instead.
+            - peakThr: Deprecated. Use peak_threshold instead.
+            - binThr: Deprecated. Use binarization_threshold instead.
+            - polyDeg: Deprecated. Use polynomial_degree instead.
+            - biasMet: Deprecated. Use bias_method instead.
+            - min_size: Deprecated. Use min_total_size instead.
+            - paralell_processing: Deprecated. Use parallel_processing instead.
 
     Returns:
         DataFrame (pd.DataFrame): Dataframe with the bootstrapped statistics.
@@ -337,7 +351,7 @@ def calculate_arcos_stats(
         "smoothK": "smooth_k",
         "biasK": "bias_k",
         "peakThr": "peak_threshold",
-        "binThr": "binarize_threshold",
+        "binThr": "binarization_threshold",
         "polyDeg": "polynomial_degree",
         "biasMet": "bias_method",
         "min_size": "min_total_size",
@@ -360,7 +374,7 @@ def calculate_arcos_stats(
     smooth_k = updated_kwargs.get("smooth_k", smooth_k)
     bias_k = updated_kwargs.get("bias_k", bias_k)
     peak_threshold = updated_kwargs.get("peak_threshold", peak_threshold)
-    binarize_threshold = updated_kwargs.get("binarize_threshold", binarize_threshold)
+    binarization_threshold = updated_kwargs.get("binarize_threshold", binarization_threshold)
     polynomial_degree = updated_kwargs.get("polynomial_degree", polynomial_degree)
     bias_method = updated_kwargs.get("bias_method", bias_method)
     min_total_size = updated_kwargs.get("min_total_size", min_total_size)
@@ -381,7 +395,7 @@ def calculate_arcos_stats(
                 smooth_k=smooth_k,
                 bias_k=bias_k,
                 peak_threshold=peak_threshold,
-                binarization_threshold=binarize_threshold,
+                binarization_threshold=binarization_threshold,
                 polynomial_degree=polynomial_degree,
                 bias_method=bias_method,
                 eps=eps,
@@ -407,7 +421,7 @@ def calculate_arcos_stats(
                 smooth_k=smooth_k,
                 bias_k=bias_k,
                 peak_threshold=peak_threshold,
-                binarization_threshold=binarize_threshold,
+                binarization_threshold=binarization_threshold,
                 polynomial_degree=polynomial_degree,
                 bias_method=bias_method,
                 eps=eps,

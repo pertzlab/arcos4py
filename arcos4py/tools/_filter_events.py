@@ -36,9 +36,9 @@ class filterCollev:
         Arguments:
             data (Dataframe): With detected collective events.
             frame_column (str): Indicating the frame column in data.
-            collid_column (str): Indicating the collective event id column in data.
+            clid_column (str): Indicating the collective event id column in data.
             obj_id_column (str): Inidicating the object identifier column such as cell track id.
-            **kwargs: Additional keyword arguments. Includes deprecated parameters.
+            **kwargs (Any): Additional keyword arguments. Includes deprecated parameters.
                 - collid_column (str): Deprecated. Use clid_column instead.
         """
         map_deprecated_params = {
@@ -80,9 +80,9 @@ class filterCollev:
         parameters specified in the object instance.
 
         Arguments:
-            coll_duration (int): Minimal duration of collective events to be selected.
-            coll_total_size (int): Minimal total size of collective events to be selected.
-            **kwargs: Additional keyword arguments. Includes deprecated parameters.
+            min_duration (int): Minimal duration of collective events to be selected.
+            min_total_size (int): Minimal total size of collective events to be selected.
+            **kwargs (Any): Additional keyword arguments. Includes deprecated parameters.
                 - coll_duration (int): Deprecated. Use min_duration instead.
                 - coll_total_size (int): Deprecated. Use min_total_size instead.
 

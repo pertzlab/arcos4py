@@ -298,7 +298,7 @@ def resample_data(  # noqa: C901
             when allow_duplicates is set to True. Defaults to 100.
         verbose (bool, optional): Whether to print progress. Defaults to False.
         parallel_processing (bool, optional): Whether to use parallel processing. Defaults to True.
-        **kwargs: Additional keyword arguments. Includes deprecated parameters.
+        **kwargs (Any): Additional keyword arguments. Includes deprecated parameters.
             - posCols (list): Deprecated. Use position_columns instead.
             - id_column (str): Deprecated. Use obj_id_column instead.
             - meas_column (str): Deprecated. Use measurement_column instead.

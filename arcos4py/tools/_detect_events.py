@@ -546,21 +546,21 @@ class Linker:
         Arguments:
             eps (float): The maximum distance between two samples for one to be considered as in
                 the neighbourhood of the other.
-            epsPrev (float | None): Frame to frame distance, value is used to connect
+            eps_prev (float | None): Frame to frame distance, value is used to connect
                 collective events across multiple frames. If "None", same value as eps is used.
-            minClSz (int): The minimum size for a cluster to be identified as a collective event.
-            minSamples (int | None): The number of samples (or total weight) in a neighbourhood for a
+            min_clustersize (int): The minimum size for a cluster to be identified as a collective event.
+            min_samples (int | None): The number of samples (or total weight) in a neighbourhood for a
                 point to be considered as a core point. This includes the point itself.
                 Only used if clusteringMethod is 'hdbscan'. If None, minSamples =  minClsz.
-            clusteringMethod (str | Callable): The clustering method to be used. One of ['dbscan', 'hdbscan']
+            clustering_method (str | Callable): The clustering method to be used. One of ['dbscan', 'hdbscan']
                 or a callable that takes a 2d array of coordinates and returns a list of cluster labels.
                 Arguments `eps`, `minClSz` and `minSamples` are ignored if a callable is passed.
-            linkingMethod (str): The linking method to be used.
+            linking_method (str): The linking method to be used.
             predictor (bool | Callable): The predictor method to be used.
-            nPrev (int): Number of previous frames the tracking
+            n_prev (int): Number of previous frames the tracking
                 algorithm looks back to connect collective events.
-            nJobs (int): Number of jobs to run in parallel (only for clustering algorithm).
-            kwargs: Additional keyword arguments. Includes deprecated parameters for backwards compatibility.
+            n_jobs (int): Number of jobs to run in parallel (only for clustering algorithm).
+            kwargs (Any): Additional keyword arguments. Includes deprecated parameters for backwards compatibility.
                 - epsPrev: Deprecated parameter for eps_prev. Use eps_prev instead.
                 - minClSz: Deprecated parameter for min_clustersize. Use min_clustersize instead.
                 - minSamples: Deprecated parameter for min_samples. Use min_samples instead.
@@ -1110,7 +1110,15 @@ def track_events_dataframe(
             See default predictor method for details.
         n_jobs (int): Number of jobs to run in parallel. Default is 1.
         show_progress (bool): Whether or not to show progress bar. Default is True.
-        **kwargs: Additional keyword arguments. Includes deprecated parameters for backwards compatibility.
+        **kwargs (Any): Additional keyword arguments. Includes deprecated parameters for backwards compatibility.
+            - epsPrev: Deprecated parameter for eps_prev. Use eps_prev instead.
+            - minClSz: Deprecated parameter for min_clustersize. Use min_clustersize instead.
+            - minSamples: Deprecated parameter for min_samples. Use min_samples instead.
+            - clusteringMethod: Deprecated parameter for clustering_method. Use clustering_method instead.
+            - linkingMethod: Deprecated parameter for linking_method. Use linking_method instead.
+            - nPrev: Deprecated parameter for n_prev. Use n_prev instead.
+            - nJobs: Deprecated parameter for n_jobs. Use n_jobs instead.
+            - showProgress: Deprecated parameter for show_progress. Use show_progress instead.
 
     Returns:
         pd.DataFrame: Dataframe with tracked events.
@@ -1192,22 +1200,22 @@ def track_events_image(
     Arguments:
         X (np.ndarray): The input array containing the images to track.
         eps (float): Distance for clustering. Default is 1.
-        epsPrev (float | None): Maximum distance for linking previous clusters, if None, eps is used. Default is None.
-        minClSz (int): Minimum cluster size. Default is 1.
-        minSamples (int | None): The number of samples (or total weight) in a neighbourhood for a
+        eps_prev (float | None): Maximum distance for linking previous clusters, if None, eps is used. Default is None.
+        min_clustersize (int): Minimum cluster size. Default is 1.
+        min_samples (int | None): The number of samples (or total weight) in a neighbourhood for a
             point to be considered as a core point. This includes the point itself.
             Only used if clusteringMethod is 'hdbscan'. If None, minSamples =  minClsz.
-        clusteringMethod (str): The method used for clustering, one of [dbscan, hdbscan]. Default is "dbscan".
-        nPrev (int): Number of previous frames to consider. Default is 1.
+        clustering_method (str): The method used for clustering, one of [dbscan, hdbscan]. Default is "dbscan".
+        n_prev (int): Number of previous frames to consider. Default is 1.
         predictor (bool | Callable): Whether or not to use a predictor. Default is False.
             True uses the default predictor. A callable can be passed to use a custom predictor.
             See default predictor method for details.
-        linkingMethod (str): The method used for linking. Default is 'nearest'.
+        linking_method (str): The method used for linking. Default is 'nearest'.
         dims (str): String of dimensions in order, such as. Default is "TXY". Possible values are "T", "X", "Y", "Z".
         downsample (int): Factor by which to downsample the image. Default is 1.
-        nJobs (int): Number of jobs to run in parallel. Default is 1.
-        showProgress (bool): Whether or not to show progress bar. Default is True.
-        **kwargs: Additional keyword arguments. Includes deprecated parameters for backwards compatibility.
+        n_jobs (int): Number of jobs to run in parallel. Default is 1.
+        show_progress (bool): Whether or not to show progress bar. Default is True.
+        **kwargs (Any): Additional keyword arguments. Includes deprecated parameters for backwards compatibility.
             - epsPrev: Deprecated parameter for eps_prev. Use eps_prev instead.
             - minClSz: Deprecated parameter for min_clustersize. Use min_clustersize instead.
             - minSamples: Deprecated parameter for min_samples. Use min_samples instead.
@@ -1464,12 +1472,12 @@ def estimate_eps(
             Can be one of ['kneepoint', 'mean', 'median'].'kneepoint' estimates the knee of the nearest neighbour
             distribution to to estimate eps. 'mean' and 'median' use the 1.5 times the mean or median of the
             nearest neighbour distances respectively.
-        pos_cols (list[str]): List of column names containing the position data.
-        frame_col (str, optional): Name of the column containing the frame number. Defaults to 't'.
+        position_columns (list[str]): List of column names containing the position data.
+        frame_column (str, optional): Name of the column containing the frame number. Defaults to 't'.
         n_neighbors (int, optional): Number of nearest neighbours to consider. Defaults to 5.
         plot (bool, optional): Whether to plot the results. Defaults to True.
         plt_size (tuple[int, int], optional): Size of the plot. Defaults to (5, 5).
-        kwargs: Keyword arguments for the method. Modify behaviour of respecitve method.
+        kwargs (Any): Keyword arguments for the method. Modify behaviour of respecitve method.
             For kneepoint: [S online, curve, direction, interp_method,polynomial_degree; For mean: [mean_multiplier]
             For median [median_multiplier]
 
