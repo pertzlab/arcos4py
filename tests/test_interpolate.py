@@ -1,6 +1,6 @@
 import pandas as pd
 import pytest
-from numpy import NaN, int64
+from numpy import nan, int64
 from pandas.testing import assert_frame_equal
 
 from arcos4py.tools import interpolation
@@ -9,7 +9,7 @@ from arcos4py.tools import interpolation
 @pytest.fixture
 def test_data() -> pd.DataFrame:
     d = {
-        't': [i if i != 4 else NaN for i in range(1, 8)],
+        't': [i if i != 4 else nan for i in range(1, 8)],
         'y': [i for i in range(1, 8)],
         'id': [1 for i in range(7)],
     }
