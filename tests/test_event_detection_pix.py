@@ -95,7 +95,15 @@ def test_4_colliding_transportaion():
     true_img = imread('tests/testdata/pix/4_colliding_transportation.tif')
     test_img = np.where(test_img == 255, 0, 1)
     tracked_img = track_events_image(
-        test_img, eps=2, eps_prev=2, min_clustersize=4, n_prev=2, dims="TXY", linking_method="transportation"
+        test_img,
+        eps=2,
+        eps_prev=2,
+        min_clustersize=4,
+        n_prev=2,
+        dims="TXY",
+        linking_method="transportation",
+        reg=10,
+        reg_m=100,
     )
     assert_array_equal(tracked_img, true_img)
 
