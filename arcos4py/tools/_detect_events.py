@@ -194,7 +194,7 @@ def brute_force_linking(
 
 
 @njit(parallel=True)
-def compute_filtered_distances(current_coords, memory_coords):
+def _compute_filtered_distances(current_coords, memory_coords):
     n, m = len(current_coords), len(memory_coords)
     distances = np.empty((n, m))
     for i in prange(n):
@@ -204,7 +204,7 @@ def compute_filtered_distances(current_coords, memory_coords):
 
 
 @njit
-def assign_labels(matches, current_indices, memory_indices, memory_cluster_labels, cluster_labels_size):
+def _assign_labels(matches, current_indices, memory_indices, memory_cluster_labels, cluster_labels_size):
     new_cluster_labels = np.full(cluster_labels_size, -1)
     for i, m in enumerate(matches):
         if m != -1:
@@ -225,8 +225,7 @@ def transportation_linking(
     cost_threshold: float = 0,
     **kwargs: Dict[str, Any],
 ) -> Tuple[np.ndarray, int]:
-    """
-    Optimized transportation linking of clusters across frames, using a pre-constructed sklearn KDTree.
+    """Optimized transportation linking of clusters across frames, using a pre-constructed sklearn KDTree.
 
     Args:
         cluster_labels (np.ndarray): The cluster labels for the current frame.
@@ -261,7 +260,7 @@ def transportation_linking(
         return np.full_like(cluster_labels, max_cluster_label), max_cluster_label
 
     # Compute distance matrix for valid pairs
-    filtered_distances = compute_filtered_distances(
+    filtered_distances = _compute_filtered_distances(
         cluster_coordinates[current_indices], memory_coordinates[memory_indices]
     )
 
@@ -278,7 +277,7 @@ def transportation_linking(
     # Set matches to -1 if the cost is too high
     matches[ot_plan[np.arange(len(matches)), matches] < cost_threshold] = -1
 
-    new_cluster_labels = assign_labels(
+    new_cluster_labels = _assign_labels(
         matches, current_indices, memory_indices, memory_cluster_labels, cluster_labels.size
     )
 
