@@ -599,7 +599,6 @@ class NoodlePlot:
             fig (matplotlib.figure.Figure): Matplotlib figure object for the noodle plot.
             axes (matplotlib.axes.Axes): Matplotlib axes for the nooble plot.
         """
-
         if projection_axis not in [self.posx, self.posy, self.posz]:
             raise ValueError(f"projection_axis has to be one of {[self.posx, self.posy, self.posz]}")
         if projection_axis == self.posx:
@@ -609,7 +608,7 @@ class NoodlePlot:
         elif projection_axis == self.posz:
             self.projection_index = 5
         if self.df.empty:
-            grpd_data =[]
+            grpd_data = []
             colors = []
         else:
             grpd_data, colors = self._prepare_data_noodleplot(
