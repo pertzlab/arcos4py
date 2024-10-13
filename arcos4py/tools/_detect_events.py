@@ -24,6 +24,7 @@ from skimage.transform import rescale
 from sklearn.cluster import DBSCAN, HDBSCAN
 from sklearn.neighbors import KDTree
 from tqdm import tqdm
+import networkx as nx
 
 from ..tools._arcos4py_deprecation import handle_deprecated_params
 
@@ -496,16 +497,8 @@ class Predictor:
             self._fitted = True
 
 
+
 class Linker:
-    """Linker class for linking collective events across multiple frames.
-
-    Attributes:
-        event_ids (np.ndarray): Array to store event IDs, for each coordinate in the current frame.
-
-    Methods:
-        link(input_coordinates): Links clusters from the previous frame to the current frame.
-    """
-
     def __init__(
         self,
         eps: float = 1,
@@ -520,6 +513,9 @@ class Linker:
         reg: float = 1,
         reg_m: float = 10,
         n_jobs: int = 1,
+        allow_merges: bool = True,
+        allow_splits: bool = True,
+        stability_threshold: int = 2,
         **kwargs,
     ):
         """Initializes the Linker object.
@@ -544,6 +540,9 @@ class Linker:
             cost_threshold (int): Threshold for filtering low-probability matches (only for transportation linking).
             reg (float): Entropy regularization parameter for unbalanced OT algorithm (only for transportation linking).
             reg_m (float): Marginal relaxation parameter for unbalanced OT (only for transportation linking).
+            stability_threshold (int): Number of consecutive frames a merge/split must persist to be considered stable.
+            allow_merges (bool): Whether to allow merges.
+            allow_splits (bool): Whether to allow splits.
             kwargs (Any): Additional keyword arguments. Includes deprecated parameters for backwards compatibility.
                 - epsPrev: Deprecated parameter for eps_prev. Use eps_prev instead.
                 - minClSz: Deprecated parameter for min_clustersize. Use min_clustersize instead.
@@ -602,7 +601,6 @@ class Linker:
         self._validate_input(eps, eps_prev, min_clustersize, min_samples, clustering_method, n_prev, n_jobs)
 
         self.event_ids = np.empty((0, 0), dtype=np.int64)
-        self.max_prev_event_id = 0
 
         if hasattr(clustering_method, '__call__'):  # check if it's callable
             self.clustering_function = clustering_method
@@ -630,6 +628,14 @@ class Linker:
                     f'Linking method must be either in {AVAILABLE_LINKING_METHODS} or a callable'  # noqa E501
                 )
 
+        self.stability_threshold = stability_threshold
+        self.allow_merges = allow_merges
+        self.allow_splits = allow_splits
+        self.merge_history: Dict[int, List[Tuple[List[int], int]]] = {}
+        self.split_history: Dict[int, List[Tuple[int, List[int]]]] = {}
+        self.lineage_graph = nx.DiGraph()
+        self.frame_counter = 0
+
     def _validate_input(self, eps, eps_prev, min_clustersize, min_samples, clustering_method, n_prev, n_jobs):
         if not isinstance(eps, (int, float, str)):
             raise ValueError(f"eps must be a number or None, got {eps}")
@@ -648,6 +654,7 @@ class Linker:
         if x.size == 0:
             return np.empty((0,), dtype=np.int64), x, np.empty((0, 1), dtype=bool)
         clusters = self.clustering_function(x)
+        print(np.unique(clusters))
         nanrows = np.isnan(clusters)
         return clusters[~nanrows], x[~nanrows], nanrows
 
@@ -685,34 +692,44 @@ class Linker:
     def _update_tree(self, coords):
         self._nn_tree = KDTree(coords)
 
-    # @profile
+    def _get_next_id(self) -> int:
+        """Generate a new unique ID."""
+        self._memory.max_prev_cluster_id += 1
+        return self._memory.max_prev_cluster_id
+
     def link(self, input_coordinates: np.ndarray) -> None:
-        """Links clusters from the previous frame to the current frame.
-
-        Arguments:
-            input_coordinates (np.ndarray): The coordinates of the current frame.
-
-        Returns:
-            None, modifies internal state with new linked clusters. New event ids are stored in self.event_ids.
-        """
+        self.frame_counter += 1
         cluster_ids, coordinates, nanrows = self._clustering(input_coordinates)
-        # check if first frame
+        
         if not len(self._memory.prev_cluster_ids):
             linked_cluster_ids = self._update_id_empty(cluster_ids)
-        # check if anything was detected in current or previous frame
         elif cluster_ids.size == 0 or self._memory.all_cluster_ids.size == 0:
             linked_cluster_ids = self._update_id_empty(cluster_ids)
         else:
             linked_cluster_ids = self._update_id(cluster_ids, coordinates)
 
-        # update memory with current frame and fit predictor if necessary
-        self._memory.add_timepoint(new_coordinates=coordinates, new_cluster_ids=linked_cluster_ids)
+        # Generate merge and split candidates
+        merge_candidates, split_candidates = self.generate_merge_split_candidates(linked_cluster_ids, cluster_ids)
+        
+        # Apply stable merges and splits
+        final_cluster_ids = self.apply_stable_merges_splits(
+            linked_cluster_ids,
+            cluster_ids,
+            merge_candidates,
+            split_candidates
+        )
+        
+        # Update lineage graph
+        self._update_lineage_graph(linked_cluster_ids, final_cluster_ids)
+
+        # Update memory and fit predictor
+        self._memory.add_timepoint(new_coordinates=coordinates, new_cluster_ids=final_cluster_ids)
         if self._predictor is not None and len(self._memory.coordinates) > 1:
             self._predictor.fit(coordinates=self._memory.coordinates, cluster_ids=self._memory.prev_cluster_ids)
         self._memory.remove_timepoint()
 
         event_ids = np.full_like(nanrows, -1, dtype=np.int64)
-        event_ids[~nanrows] = linked_cluster_ids
+        event_ids[~nanrows] = final_cluster_ids
         self.event_ids = event_ids
 
     # @profile
@@ -751,7 +768,96 @@ class Linker:
         except ValueError:
             pass
         return linked_cluster_ids
+    
+    def generate_merge_split_candidates(
+        self,
+        linked_cluster_ids: np.ndarray,
+        original_cluster_ids: np.ndarray
+    ) -> Tuple[Dict[int, List[int]], Dict[int, List[int]]]:
+        # Map from original to linked clusters
+        orig_to_linked = {}
+        for orig, linked in zip(original_cluster_ids, linked_cluster_ids):
+            if orig not in orig_to_linked:
+                orig_to_linked[orig] = set()
+            orig_to_linked[orig].add(linked)
 
+        # Map from linked to original clusters
+        linked_to_orig = {}
+        for orig, linked in zip(original_cluster_ids, linked_cluster_ids):
+            if linked not in linked_to_orig:
+                linked_to_orig[linked] = set()
+            linked_to_orig[linked].add(orig)
+
+        # Identify merge candidates
+        merge_candidates = {orig: list(linked) for orig, linked in orig_to_linked.items() if len(linked) > 1}
+
+        # Identify split candidates
+        split_candidates = {linked: list(orig) for linked, orig in linked_to_orig.items() if len(orig) > 1}
+
+        return merge_candidates, split_candidates
+
+    def apply_stable_merges_splits(
+        self,
+        linked_cluster_ids: np.ndarray,
+        original_cluster_ids: np.ndarray,
+        merge_candidates: Dict[int, List[int]],
+        split_candidates: Dict[int, List[int]]
+    ) -> np.ndarray:
+        final_cluster_ids = linked_cluster_ids.copy()
+
+        if self.allow_merges:
+            for new_id, old_ids in merge_candidates.items():
+                old_ids = tuple(sorted(old_ids))  # Make the list of old IDs hashable
+                if new_id not in self.merge_history:
+                    self.merge_history[new_id] = []
+                self.merge_history[new_id].append((old_ids, new_id))
+                
+                # Check if this merge has been stable
+                if len(self.merge_history[new_id]) >= self.stability_threshold:
+                    recent_merges = self.merge_history[new_id][-self.stability_threshold:]
+                    if all(merge == recent_merges[0] for merge in recent_merges):
+                        merge_id = self._get_next_id()
+                        for old_id in old_ids:
+                            final_cluster_ids[linked_cluster_ids == old_id] = merge_id
+
+        if self.allow_splits:
+            for old_id, new_ids in split_candidates.items():
+                new_ids = tuple(sorted(new_ids))  # Make the list of new IDs hashable
+                if old_id not in self.split_history:
+                    self.split_history[old_id] = []
+                self.split_history[old_id].append((old_id, new_ids))
+                
+                # Check if this split has been stable
+                if len(self.split_history[old_id]) >= self.stability_threshold:
+                    recent_splits = self.split_history[old_id][-self.stability_threshold:]
+                    if all(split == recent_splits[0] for split in recent_splits):
+                        for new_id in new_ids:
+                            split_id = self._get_next_id()
+                            mask = (linked_cluster_ids == old_id) & (original_cluster_ids == new_id)
+                            final_cluster_ids[mask] = split_id
+
+        # Clean up history, keeping only the most recent entries
+        self.merge_history = {k: v[-self.stability_threshold:] for k, v in self.merge_history.items()}
+        self.split_history = {k: v[-self.stability_threshold:] for k, v in self.split_history.items()}
+
+        return final_cluster_ids
+
+    def _update_lineage_graph(self, previous_cluster_ids: np.ndarray, current_cluster_ids: np.ndarray):
+        previous_unique = np.unique(previous_cluster_ids)
+        current_unique = np.unique(current_cluster_ids)
+        
+        for prev_id in previous_unique:
+            prev_node = (self.frame_counter - 1, prev_id)
+            self.lineage_graph.add_node(prev_node, frame=self.frame_counter - 1, cluster_id=prev_id)
+            
+            for curr_id in current_unique:
+                if np.any((previous_cluster_ids == prev_id) & (current_cluster_ids == curr_id)):
+                    curr_node = (self.frame_counter, curr_id)
+                    self.lineage_graph.add_node(curr_node, frame=self.frame_counter, cluster_id=curr_id)
+                    self.lineage_graph.add_edge(prev_node, curr_node)
+
+    def get_lineage_graph(self) -> nx.DiGraph:
+        return self.lineage_graph
 
 class BaseTracker(ABC):
     """Abstract base class for tracker classes."""
