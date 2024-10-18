@@ -35,6 +35,19 @@ def test_1_split():
     assert_array_equal(tracked_img, true_img)
 
 
+def test_1_split_with_splitting_allowed():
+    """Test split event detection on a simple image."""
+    test_img = imread('tests/testdata/pix/1_split.tif')
+    true_img = imread('tests/testdata/pix/1_split_allowed_true.tif')
+    test_img = np.where(test_img == 255, 0, 1)
+    tracked_img, lineage_tracker = track_events_image(
+        test_img, eps=2, eps_prev=2, min_clustersize=4, dims="TXY", allow_splits=True, stability_threshold=2
+    )
+    cluster_history = lineage_tracker.get_cluster_history(2)  # cluster id 2
+    assert_array_equal(tracked_img, true_img)
+    assert_array_equal([1, 2], [i.cluster_id for i in cluster_history[0]])  # compare cluster history of first parent
+
+
 def test_2_colliding():
     """Test colliding event detection on a simple image."""
     test_img = imread('tests/testdata/pix/2_colliding.tif')
@@ -86,6 +99,27 @@ def test_4_colliding():
     true_img = imread('tests/testdata/pix/4_colliding_true.tif')
     test_img = np.where(test_img == 255, 0, 1)
     tracked_img = track_events_image(test_img, eps=2, eps_prev=2, min_clustersize=4, n_prev=1, dims="TXY")
+    assert_array_equal(tracked_img, true_img)
+
+
+def test_4_colliding_with_allow_merges():
+    """Test colliding event detection on a simple image."""
+    test_img = imread('tests/testdata/pix/4_colliding.tif')
+    true_img = imread('tests/testdata/pix/4_colliding_merge_allowed.tif')
+    test_img = np.where(test_img == 255, 0, 1)
+    tracked_img, lineage_tracker = track_events_image(
+        test_img,
+        eps=2,
+        eps_prev=2,
+        min_clustersize=4,
+        n_prev=1,
+        dims="TXY",
+        allow_merges=True,
+        stability_threshold=1,
+        allow_splits=True,
+    )
+    cluster_history = lineage_tracker.get_cluster_history(5)  # cluster id 5, timepoint 7
+    assert_array_equal([1, 5], [i.cluster_id for i in cluster_history[0]])  # compare cluster history of first parent
     assert_array_equal(tracked_img, true_img)
 
 

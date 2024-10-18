@@ -26,14 +26,24 @@ Examples:
 
 from __future__ import annotations
 
-from typing import Any, Union
+import colorsys
+import logging
+from collections import defaultdict
+from typing import TYPE_CHECKING, Any, Dict, List, Set, Tuple, Union
 
+import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from matplotlib.path import Path
+
+if TYPE_CHECKING:
+    from ..tools._detect_events import LineageTracker
 
 from ..tools._arcos4py_deprecation import handle_deprecated_params
+
+logging.basicConfig(level=logging.INFO)
 
 TAB20 = [
     "#1f77b4",
@@ -623,3 +633,252 @@ class NoodlePlot:
             )
         fig, axes = self._create_noodle_plot(grpd_data, colors)
         return fig, axes
+
+
+class LineagePlot:
+    """Class to draw a lineage tree of clusters over time.
+
+    Attributes:
+        figsize (tuple): Size of the figure.
+        node_size (int): Size of the nodes.
+        draw_nodes (bool): If True, draw nodes.
+        edge_width (int): Width of the edges.
+        edge_alpha (float): Alpha value of the edges.
+        color_seed (int): Seed for the color generation.
+        title (str): Title of the plot.
+        xlabel (str): Label of the x-axis.
+        ylabel (str): Label of the y-axis.
+        font_size (int): Font size of the labels.
+        curve_factor (float): Factor to curve the edges.
+        orphan_color (tuple): Color of the orphan nodes.
+    """
+    def __init__(
+        self,
+        figsize=(18, 18),
+        node_size=50,
+        draw_nodes=False,
+        edge_width=2,
+        edge_alpha=0.8,
+        color_seed=42,
+        title="Cluster Lineage Tree",
+        xlabel="Frame",
+        ylabel="Cluster",
+        font_size=16,
+        curve_factor=0.9,
+        orphan_color=(0.7, 0.7, 0.7, 1.0),
+    ):
+        """Constructs class with given parameters.
+
+        Arguments:
+            figsize (tuple): Size of the figure.
+            node_size (int): Size of the nodes.
+            draw_nodes (bool): If True, draw nodes.
+            edge_width (int): Width of the edges.
+            edge_alpha (float): Alpha value of the edges.
+            color_seed (int): Seed for the color generation.
+            title (str): Title of the plot.
+            xlabel (str): Label of the x-axis.
+            ylabel (str): Label of the y-axis.
+            font_size (int): Font size of the labels.
+            curve_factor (float): Factor to curve the edges.
+            orphan_color (tuple): Color of the orphan nodes.
+        """
+        # Initialization code remains the same
+        self.fig, self.ax = plt.subplots(figsize=figsize)
+        self.node_size = node_size
+        self.edge_width = edge_width
+        self.edge_alpha = edge_alpha
+        self.title = title
+        self.xlabel = xlabel
+        self.ylabel = ylabel
+        self.font_size = font_size
+        self.curve_factor = curve_factor
+        self.orphan_color = orphan_color
+        self.draw_nodes = draw_nodes
+        self.color_seed = color_seed
+
+        self.lineage_colors: Dict[int, Tuple[float, float, float, float]] = {}
+        self.node_positions: Dict[Tuple[int, int], Tuple[float, float]] = {}
+        self.lineage_edges: List[Tuple[Tuple[int, int], Tuple[int, int]]] = []
+        self.node_lineage_color: Dict[Tuple[int, int], Tuple[float, float, float, float]] = {}
+        self.child_to_parent: Dict[Tuple[int, int], Set[Tuple[int, int]]] = {}
+        self.parent_to_child: Dict[Tuple[int, int], Set[Tuple[int, int]]] = {}
+        self.lineage_order: List[int] = []
+        self.all_nodes: Set[Tuple[int, int]] = set()
+        self.frame_to_nodes: Dict[int, List[Tuple[int, int]]] = defaultdict(list)
+
+    def _process_data(self, tracker: LineageTracker):
+        # Initialize data structures
+        self.all_nodes = set()
+        self.frame_to_nodes = defaultdict(list)
+        self.parent_to_child = {}
+        self.child_to_parent = {}
+        self.lineage_edges = []
+        self.minframe_nodes = set()
+
+        # Expand nodes and edges based on parent-child relationships over time
+        for node in tracker.nodes.values():
+            # Add edges within the same cluster over consecutive frames
+            for frame in range(node.minframe, node.maxframe):
+                source = (frame, node.cluster_id)
+                target = (frame + 1, node.cluster_id)
+                self.lineage_edges.append((source, target))
+                self.all_nodes.add(source)
+                self.all_nodes.add(target)
+                self.parent_to_child.setdefault(source, set()).add(target)
+                self.child_to_parent.setdefault(target, set()).add(source)
+
+            # Track node persistence across frames
+            for frame in range(node.minframe, node.maxframe + 1):
+                current_node = (frame, node.cluster_id)
+                self.all_nodes.add(current_node)
+                self.frame_to_nodes[frame].append(current_node)
+                # Add to minframe_nodes if it's the first frame
+                if frame == node.minframe:
+                    self.minframe_nodes.add(current_node)
+
+            # Add edges between parent and child clusters
+            child_start_frame = node.minframe
+            child_node = (child_start_frame, node.cluster_id)
+            for parent in node.parents:
+                parent_end_frame = parent.maxframe
+                parent_node = (parent_end_frame, parent.cluster_id)
+                self.lineage_edges.append((parent_node, child_node))
+                self.parent_to_child.setdefault(parent_node, set()).add(child_node)
+                self.child_to_parent.setdefault(child_node, set()).add(parent_node)
+
+        # Assign colors based on lineage_id
+        self._assign_lineage_colors(tracker)
+        self._order_clusters_by_relationships()
+
+        # Position nodes
+        cluster_id_to_y = {cluster_id: idx for idx, cluster_id in enumerate(self.lineage_order)}
+        max_idx = len(cluster_id_to_y) - 1
+        self.node_positions = {}
+        for node_tuple in self.all_nodes:
+            frame, cluster_id = node_tuple
+            x = frame
+            y = cluster_id_to_y[cluster_id] / max_idx if max_idx > 0 else 0.5
+            self.node_positions[node_tuple] = (x, y)
+
+    def _assign_lineage_colors(self, tracker: LineageTracker):
+        # Collect unique lineage IDs
+        unique_lineages = {node.lineage_id for node in tracker.nodes.values()}
+
+        # Generate a color for each unique lineage
+        lineage_colors = self._generate_colors(len(unique_lineages))
+        lineage_color_map = dict(zip(unique_lineages, lineage_colors))
+
+        # Assign colors to nodes based on their lineage_id
+        for node in tracker.nodes.values():
+            color = lineage_color_map.get(node.lineage_id, self.orphan_color)
+            for frame in range(node.minframe, node.maxframe + 1):
+                self.node_lineage_color[(frame, node.cluster_id)] = color
+
+        # Assign orphan color to any node without lineage
+        for node_tuple in self.all_nodes:
+            if node_tuple not in self.node_lineage_color:
+                self.node_lineage_color[node_tuple] = self.orphan_color
+
+    def _order_clusters_by_relationships(self):
+        cluster_adjacency = defaultdict(set)
+        for edge in self.lineage_edges:
+            source_cluster_id = edge[0][1]
+            target_cluster_id = edge[1][1]
+            if source_cluster_id != target_cluster_id:
+                cluster_adjacency[source_cluster_id].add(target_cluster_id)
+                cluster_adjacency[target_cluster_id].add(source_cluster_id)
+
+        cluster_degrees = {cluster_id: len(neighbors) for cluster_id, neighbors in cluster_adjacency.items()}
+        weighted_degrees = {}
+        for cluster_id, neighbors in cluster_adjacency.items():
+            weighted_degrees[cluster_id] = sum(cluster_degrees[neighbor] for neighbor in neighbors)
+
+        all_cluster_ids = set(cluster_id for _, cluster_id in self.all_nodes)
+        unvisited_clusters = set(all_cluster_ids)
+
+        start_cluster = max(weighted_degrees, key=weighted_degrees.get) if weighted_degrees else min(all_cluster_ids)
+
+        self.lineage_order = []
+        visited_clusters = set()
+
+        def _add_cluster(cluster):
+            self.lineage_order.append(cluster)
+            visited_clusters.add(cluster)
+            unvisited_clusters.discard(cluster)
+
+        _add_cluster(start_cluster)
+
+        while unvisited_clusters:
+            candidates = []
+            for cluster_id in unvisited_clusters:
+                connections = len(cluster_adjacency.get(cluster_id, set()) & visited_clusters)
+                weighted_connections = sum(
+                    cluster_degrees.get(c, 0) for c in (cluster_adjacency.get(cluster_id, set()) & visited_clusters)
+                )
+                candidates.append((cluster_id, connections, weighted_connections, weighted_degrees.get(cluster_id, 0)))
+
+            if candidates:
+                next_cluster = max(candidates, key=lambda x: (x[1], x[2], x[3]))[0]
+            else:
+                next_cluster = max(unvisited_clusters, key=lambda x: weighted_degrees.get(x, 0))
+
+            _add_cluster(next_cluster)
+
+        return self.lineage_order
+
+    def _generate_colors(self, n: int) -> List[Tuple[float, float, float, float]]:
+        colors = []
+        rng = np.random.default_rng(self.color_seed)
+        for i in range(n):
+            colors.append((*colorsys.hsv_to_rgb(rng.random(), 0.8, 0.8), 1.0))
+        return colors
+
+    def _draw_curved_edge(self, start, end, color):
+        """Draw a curved edge between two points, with color."""
+        mid_x = (start[0] + end[0]) / 2
+        mid_y1 = start[1] + (end[1] - start[1]) * self.curve_factor
+        mid_y2 = end[1] - (end[1] - start[1]) * self.curve_factor
+        path = Path(
+            [start, (mid_x, mid_y1), (mid_x, mid_y2), end], [Path.MOVETO, Path.CURVE4, Path.CURVE4, Path.CURVE4]
+        )
+        patch = patches.PathPatch(
+            path, facecolor="none", edgecolor=color, alpha=self.edge_alpha, linewidth=self.edge_width
+        )
+        self.ax.add_patch(patch)
+
+    def draw_tree(self, tracker: LineageTracker):
+        """Draw the lineage tree based on the processed data."""
+        self._process_data(tracker)
+
+        # Draw edges with lineage-based coloring
+        for source, target in self.lineage_edges:
+            source_pos = self.node_positions[source]
+            target_pos = self.node_positions[target]
+            color = self.node_lineage_color.get(source, self.orphan_color)
+            self._draw_curved_edge(source_pos, target_pos, color)
+
+        # Draw nodes if required
+        if self.draw_nodes:
+            for node in self.minframe_nodes:
+                pos = self.node_positions[node]
+                color = self.node_lineage_color.get(node, self.orphan_color)
+                self.ax.scatter(pos[0], pos[1], s=self.node_size, c=[color], zorder=2)
+
+        # Set labels and title
+        self.ax.set_title(self.title, fontsize=self.font_size)
+        self.ax.set_xlabel(self.xlabel, fontsize=self.font_size - 2)
+        self.ax.set_ylabel(self.ylabel, fontsize=self.font_size - 2)
+
+        # Set y-ticks to cluster IDs
+        cluster_ids = self.lineage_order
+        cluster_id_to_y = {cluster_id: idx for idx, cluster_id in enumerate(cluster_ids)}
+        max_idx = len(cluster_ids) - 1
+        y_ticks = [cluster_id_to_y[cluster_id] / max_idx if max_idx > 0 else 0.5 for cluster_id in cluster_ids]
+        self.ax.set_yticks(y_ticks)
+        self.ax.set_yticklabels(cluster_ids, fontsize=self.font_size - 4)
+        plt.tight_layout()
+
+    def show(self):
+        """Display the plot."""
+        plt.show()
