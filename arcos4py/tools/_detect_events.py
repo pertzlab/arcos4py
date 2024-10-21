@@ -1014,6 +1014,7 @@ class Linker:
             pass
         return linked_cluster_ids
 
+
     def _identify_potential_merges_splits(self, linked_cluster_ids, original_cluster_ids):
         linked_unique = np.unique(linked_cluster_ids)
         original_unique = np.unique(original_cluster_ids)
@@ -1022,22 +1023,23 @@ class Linker:
         potential_splits = {}
 
         if self._allow_splits:
-            for linked_id in linked_unique:
+            for linked_id in np.sort(linked_unique):  # Sort linked_unique
                 linked_mask = linked_cluster_ids == linked_id
                 original_ids = np.unique(original_cluster_ids[linked_mask])
 
                 if len(original_ids) > 1:
-                    potential_splits[linked_id] = list(original_ids)
+                    potential_splits[linked_id] = sorted(original_ids.tolist())  # Sort original_ids
 
         if self._allow_merges:
-            for original_id in original_unique:
+            for original_id in np.sort(original_unique):  # Sort original_unique
                 original_mask = original_cluster_ids == original_id
                 linked_ids = np.unique(linked_cluster_ids[original_mask])
 
                 if len(linked_ids) > 1:
-                    potential_merges[original_id] = list(linked_ids)
+                    potential_merges[original_id] = sorted(linked_ids.tolist())  # Sort linked_ids
 
         return potential_merges, potential_splits
+
 
     def _apply_stable_merges_splits(self, linked_cluster_ids, original_cluster_ids):
         potential_merges, potential_splits = self._identify_potential_merges_splits(
@@ -1049,7 +1051,7 @@ class Linker:
         current_frame = self.frame_counter
 
         # Process potential splits
-        for linked_id, original_ids in potential_splits.items():
+        for linked_id, original_ids in sorted(potential_splits.items()):  # Sort potential_splits
             split_sizes = [
                 np.sum((linked_cluster_ids == linked_id) & (original_cluster_ids == orig_id))
                 for orig_id in original_ids
@@ -1068,7 +1070,7 @@ class Linker:
                     split_merge_events.append(('split', split_key, original_ids))
 
         # Process potential merges
-        for original_id, linked_ids in potential_merges.items():
+        for original_id, linked_ids in sorted(potential_merges.items()):  # Sort potential_merges
             merge_key = tuple(sorted(linked_ids))
             if merge_key not in self._merge_history:
                 self._merge_history[merge_key] = []
@@ -1082,7 +1084,7 @@ class Linker:
 
         # Resolve conflicts and apply changes
         applied_changes = set()
-        for event_type, event_key, cluster_ids in split_merge_events:
+        for event_type, event_key, cluster_ids in sorted(split_merge_events):  # Sort split_merge_events
             # Check if this event conflicts with any applied changes
             if any(id in applied_changes for id in cluster_ids):
                 continue
