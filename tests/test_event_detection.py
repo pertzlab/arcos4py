@@ -284,6 +284,8 @@ def test_4_colliding_with_allow_merges():
     """Test colliding event detection on a simple image."""
     test_df = pd.read_csv('tests/testdata/4obj_merge_allowed.csv')
     true_df = pd.read_csv('tests/testdata/4obj_merge_allowed_res.csv')
+    # Sort the test data to ensure consistent order
+    test_df = test_df.sort_values(by=['T', 'X', 'Y']).reset_index(drop=True)
 
     tracked_df, _ = track_events_dataframe(
         test_df,
