@@ -297,11 +297,7 @@ def test_4_colliding_with_allow_merges():
         stability_threshold=1,
         allow_splits=True,
     )
-    # make sure both are sorted by T, X, Y
-    tracked_df = tracked_df.sort_values(['T', 'X', 'Y']).reset_index(drop=True)
-    true_df = true_df.sort_values(['T', 'X', 'Y']).reset_index(drop=True)
-
-    assert_frame_equal(tracked_df, true_df, check_dtype=False)
+    assert_frame_equal(tracked_df, true_df, check_dtype=False, check_like=True)
 
 
 def test_cross_2_objects():
