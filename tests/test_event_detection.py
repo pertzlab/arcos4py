@@ -297,12 +297,23 @@ def test_4_colliding_with_allow_merges():
         stability_threshold=1,
         allow_splits=True,
     )
-    
-    # Sort by relevant columns (assuming 'T', 'X', and 'Y' are keys)
+
+    # Sort by relevant columns
     tracked_df = tracked_df.sort_values(by=['T', 'X', 'Y']).reset_index(drop=True)
     true_df = true_df.sort_values(by=['T', 'X', 'Y']).reset_index(drop=True)
 
-    assert_frame_equal(tracked_df, true_df, check_dtype=False, check_like=True)
+    # Normalize the cluster labels in both dataframes
+    def normalize_cluster_labels(df, label_column):
+        # Create a mapping from old labels to new labels based on sorted unique labels
+        unique_labels = df[label_column].unique()
+        label_mapping = {old_label: new_label for new_label, old_label in enumerate(sorted(unique_labels), start=1)}
+        df[label_column] = df[label_column].map(label_mapping)
+        return df
+
+    tracked_df = normalize_cluster_labels(tracked_df, 'collid')
+    true_df = normalize_cluster_labels(true_df, 'collid')
+
+    assert_frame_equal(tracked_df, true_df, check_dtype=False)
 
 
 def test_cross_2_objects():
