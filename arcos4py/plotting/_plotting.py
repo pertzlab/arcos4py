@@ -37,6 +37,8 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from matplotlib.path import Path
+from scipy.cluster.hierarchy import dendrogram, linkage
+from scipy.spatial.distance import squareform
 
 if TYPE_CHECKING:
     from ..tools._detect_events import LineageTracker
@@ -635,16 +637,6 @@ class NoodlePlot:
         return fig, axes
 
 
-from typing import Dict, List, Set, Tuple
-from collections import defaultdict, deque
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-from matplotlib.path import Path
-import numpy as np
-import colorsys
-from scipy.cluster.hierarchy import linkage, dendrogram
-from scipy.spatial.distance import squareform
-
 class LineagePlot:
     """Class to draw a lineage tree of clusters over time.
 
@@ -664,6 +656,7 @@ class LineagePlot:
         show_node_labels (bool): If True, display node labels on the plot.
         main_lineage_id (int): The lineage ID of the main lineage to be plotted on the same row.
     """
+
     def __init__(
         self,
         figsize=(18, 18),
@@ -798,7 +791,8 @@ class LineagePlot:
 
             # Get root nodes (nodes without parents in this lineage)
             root_nodes = {
-                node for node in lineage_nodes
+                node
+                for node in lineage_nodes
                 if not any(parent in lineage_nodes for parent in self.child_to_parent.get(node, []))
             }
 
@@ -815,7 +809,8 @@ class LineagePlot:
 
                     # Get children in the same lineage
                     children = [
-                        child for child in self.parent_to_child.get(current_node, [])
+                        child
+                        for child in self.parent_to_child.get(current_node, [])
                         if self.node_to_lineage_id.get(child) == lineage_id
                     ]
 
@@ -858,7 +853,10 @@ class LineagePlot:
         # Assign colors to nodes
         for node_tuple in self.all_nodes:
             node_id = id_to_color_attr.get(node_tuple)
-            color = color_map.get(node_id, self.orphan_color)
+            if node_id is None:
+                color = self.orphan_color
+            else:
+                color = color_map.get(node_id, self.orphan_color)
             self.node_color[node_tuple] = color
 
     def _order_lineages_by_merging_and_splitting_events(self, tracker: LineageTracker):
@@ -932,8 +930,7 @@ class LineagePlot:
         # Move plot_lineage_ids corresponding to main_lineage_id to the beginning
         if self.main_lineage_id is not None:
             main_lineage_plot_ids = [
-                pid for pid, lid in self.plot_lineage_id_to_lineage_id.items()
-                if lid == self.main_lineage_id
+                pid for pid, lid in self.plot_lineage_id_to_lineage_id.items() if lid == self.main_lineage_id
             ]
             lineage_order = [pid for pid in lineage_order if pid not in main_lineage_plot_ids]
             lineage_order = main_lineage_plot_ids + lineage_order
@@ -951,8 +948,7 @@ class LineagePlot:
         fixed_positions = {}
         if self.main_lineage_id is not None:
             main_lineage_plot_ids = [
-                pid for pid, lid in self.plot_lineage_id_to_lineage_id.items()
-                if lid == self.main_lineage_id
+                pid for pid, lid in self.plot_lineage_id_to_lineage_id.items() if lid == self.main_lineage_id
             ]
             for idx, pid in enumerate(main_lineage_plot_ids):
                 positions[pid] = idx  # Move them to the beginning
