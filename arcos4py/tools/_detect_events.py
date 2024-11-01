@@ -866,6 +866,25 @@ class LineageTracker:
         }
 
         return lineage_durations, lineage_sizes
+    
+    def _get_merge_split_stats(self):
+        """Calculate merge and split statistics for each lineage.
+
+        Returns:
+            Tuple[Dict, Dict]: Maps of lineage_id to merge and split counts
+        """
+        lineage_merges = defaultdict(int)
+        lineage_splits = defaultdict(int)
+
+        # Second pass: count merges and splits
+        for node in self.nodes.values():
+            lineage_id = node.lineage_id
+            if len(node.parents) > 1:
+                lineage_merges[lineage_id] += 1
+            if len(node.children) > 1:
+                lineage_splits[lineage_id] += 1
+
+        return lineage_merges, lineage_splits
 
     def _get_lineage_size_filtered_ids(self, min_size: int = None, max_size: int = None):
         """Returns set of node IDs filtered by lineage size.
@@ -1348,6 +1367,9 @@ class Linker:
                         final_cluster_ids[valid_split_points] = split_id
                         modified_points[valid_split_points] = True
 
+        # resolve memory conflicts
+        self._resolve_memory_conflicts(linked_cluster_ids, final_cluster_ids)
+
         # Clean up history
         history_length = self._stability_threshold * 5
         self._merge_candidate_history = {
@@ -1362,6 +1384,15 @@ class Linker:
         }
 
         return final_cluster_ids
+    
+    def _resolve_memory_conflicts(self, linked_cluster_ids, final_cluster_ids):
+        # Resolve conflicts in the memory by propagating the newly generated final cluster IDS backwards
+        # to the original cluster IDs as this could otherwise lead to conflicts when using memory to link
+        for i, (linked_id, final_id) in enumerate(zip(linked_cluster_ids, final_cluster_ids)):
+            if linked_id > 0:
+                for idx, i in enumerate(self._memory.prev_cluster_ids):
+                   self._memory.prev_cluster_ids[idx] = np.where(i == linked_id, final_id, i)
+
 
 
 class BaseTracker(ABC):
