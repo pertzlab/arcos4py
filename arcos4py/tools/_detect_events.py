@@ -317,6 +317,13 @@ class Memory:
     prev_cluster_ids: list[np.ndarray] = field(default_factory=lambda: [], init=False)
     max_prev_cluster_id: int = 0
 
+    def remove_invalid_ids(self, invalid_ids: set[int]):
+        """Remove all points with invalid IDs from memory."""
+        for i in range(len(self.prev_cluster_ids)):
+            valid_mask = ~np.isin(self.prev_cluster_ids[i], list(invalid_ids))
+            self.coordinates[i] = self.coordinates[i][valid_mask]
+            self.prev_cluster_ids[i] = self.prev_cluster_ids[i][valid_mask]
+
     def update(self, new_coordinates, new_cluster_ids):
         """Updates the coordinates and previous cluster IDs.
 
@@ -866,7 +873,7 @@ class LineageTracker:
         }
 
         return lineage_durations, lineage_sizes
-    
+
     def _get_merge_split_stats(self):
         """Calculate merge and split statistics for each lineage.
 
@@ -1319,7 +1326,7 @@ class Linker:
 
                 # stability condition for splits
                 frames = self._split_candidate_history[split_key]
-                frames_in_window = [f for f in frames if current_frame - f < self._stability_threshold * 2]
+                frames_in_window = [f for f in frames if current_frame - f < self._stability_threshold]
                 if len(frames_in_window) >= self._stability_threshold:
                     split_merge_events.append(('split', split_key, original_ids))
 
@@ -1332,22 +1339,24 @@ class Linker:
 
             # stability condition for merges
             frames = self._merge_candidate_history[merge_key]
-            frames_in_window = [f for f in frames if current_frame - f < self._stability_threshold * 2]
+            frames_in_window = [f for f in frames if current_frame - f < self._stability_threshold]
             if len(frames_in_window) >= self._stability_threshold:
                 split_merge_events.append(('merge', merge_key, linked_ids))
 
         # Track which points have been modified to prevent double-modifications
         modified_points = np.zeros_like(final_cluster_ids, dtype=bool)
 
+        # Track which IDs become invalid due to splits/merges
+        invalid_ids = set()
+
         # Resolve and apply changes
         for event_type, event_key, cluster_ids in sorted(split_merge_events):
             if event_type == 'merge':
-                # Create masks for all points involved in this merge
                 merge_mask = np.zeros_like(final_cluster_ids, dtype=bool)
                 for linked_id in cluster_ids:
                     merge_mask |= final_cluster_ids == linked_id
+                    invalid_ids.add(linked_id)  # Add all merged IDs to invalid set
 
-                # Only merge points that haven't been modified by a split
                 valid_merge_points = merge_mask & ~modified_points
                 if np.sum(valid_merge_points) >= self._min_clustersize:
                     merge_id = self._get_next_id()
@@ -1356,43 +1365,33 @@ class Linker:
 
             elif event_type == 'split':
                 linked_id = event_key
-                for original_id in cluster_ids:
-                    # Create mask for this specific split
-                    split_mask = (linked_cluster_ids == linked_id) & (original_cluster_ids == original_id)
+                invalid_ids.add(linked_id)  # Add split ID to invalid set
 
-                    # Only split points that haven't been modified by a merge
+                for original_id in cluster_ids:
+                    split_mask = (linked_cluster_ids == linked_id) & (original_cluster_ids == original_id)
                     valid_split_points = split_mask & ~modified_points
                     if np.sum(valid_split_points) >= self._min_clustersize:
                         split_id = self._get_next_id()
                         final_cluster_ids[valid_split_points] = split_id
                         modified_points[valid_split_points] = True
 
-        # resolve memory conflicts
-        self._resolve_memory_conflicts(linked_cluster_ids, final_cluster_ids)
+        # Remove all invalid IDs from memory
+        if invalid_ids:
+            self._memory.remove_invalid_ids(invalid_ids)
 
         # Clean up history
-        history_length = self._stability_threshold * 5
         self._merge_candidate_history = {
-            k: [f for f in v if current_frame - f < history_length]
+            k: [f for f in v if current_frame - f < self._stability_threshold]
             for k, v in self._merge_candidate_history.items()
             if v
         }
         self._split_candidate_history = {
-            k: [f for f in v if current_frame - f < history_length]
+            k: [f for f in v if current_frame - f < self._stability_threshold]
             for k, v in self._split_candidate_history.items()
             if v
         }
 
         return final_cluster_ids
-    
-    def _resolve_memory_conflicts(self, linked_cluster_ids, final_cluster_ids):
-        # Resolve conflicts in the memory by propagating the newly generated final cluster IDS backwards
-        # to the original cluster IDs as this could otherwise lead to conflicts when using memory to link
-        for i, (linked_id, final_id) in enumerate(zip(linked_cluster_ids, final_cluster_ids)):
-            if linked_id > 0:
-                for idx, i in enumerate(self._memory.prev_cluster_ids):
-                   self._memory.prev_cluster_ids[idx] = np.where(i == linked_id, final_id, i)
-
 
 
 class BaseTracker(ABC):
