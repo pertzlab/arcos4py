@@ -1116,7 +1116,7 @@ class Linker:
         self._merge_candidate_history: Dict[int, List[Tuple[List[int], int]]] = {}
         self._split_candidate_history: Dict[int, List[Tuple[int, List[int]]]] = {}
         self.lineage_tracker = LineageTracker()
-        self.frame_counter = 0
+        self.frame_counter = -1 # Start at -1 to get the first frame to be 0
         self._remove_small_clusters = remove_small_clusters
         self._min_clustersize = min_clustersize
         self._min_size_for_split = min_size_for_split
@@ -1217,11 +1217,11 @@ class Linker:
         else:
             linked_cluster_ids = self._update_id(original_cluster_ids, coordinates)
 
-        # Apply stable merges and splits, and optionally remove small clusters
-        final_cluster_ids = self._apply_stable_merges_splits(linked_cluster_ids, original_cluster_ids)
-
         if self._remove_small_clusters:
-            final_cluster_ids = self._apply_remove_small_clusters(final_cluster_ids, original_cluster_ids)
+            final_cluster_ids = self._apply_remove_small_clusters(linked_cluster_ids, original_cluster_ids)
+
+        # Apply stable merges and splits
+        final_cluster_ids = self._apply_stable_merges_splits(linked_cluster_ids, original_cluster_ids)
 
         # Update lineage graph
         self.lineage_tracker._add_frame(linked_cluster_ids, final_cluster_ids, self.frame_counter)
