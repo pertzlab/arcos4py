@@ -1116,7 +1116,7 @@ class Linker:
         self._merge_candidate_history: Dict[int, List[Tuple[List[int], int]]] = {}
         self._split_candidate_history: Dict[int, List[Tuple[int, List[int]]]] = {}
         self.lineage_tracker = LineageTracker()
-        self.frame_counter = -1 # Start at -1 to get the first frame to be 0
+        self.frame_counter = -1  # Start at -1 to get the first frame to be 0
         self._remove_small_clusters = remove_small_clusters
         self._min_clustersize = min_clustersize
         self._min_size_for_split = min_size_for_split

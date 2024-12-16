@@ -29,7 +29,7 @@ from __future__ import annotations
 import colorsys
 import logging
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any, Dict, List, Set, Tuple, Union
+from typing import Any, Dict, List, Set, Tuple, Union
 
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
@@ -39,9 +39,6 @@ import seaborn as sns
 from matplotlib.path import Path
 from scipy.cluster.hierarchy import dendrogram, linkage
 from scipy.spatial.distance import squareform
-
-if TYPE_CHECKING:
-    from ..tools._detect_events import LineageTracker
 
 from ..tools._arcos4py_deprecation import handle_deprecated_params
 
@@ -704,12 +701,13 @@ class LineagePlot:
         self.node_to_plot_lineage_id: Dict[Tuple[int, int], int] = {}
         self.plot_lineage_id_to_lineage_id: Dict[int, int] = {}  # New mapping
 
-    def _process_data(self, tracker: LineageTracker):
+    def _process_data(self, tracker):
+        """Processes the lineage tracker data to prepare for plotting."""
         # Initialize data structures
         self.all_nodes = set()
         self.frame_to_nodes = defaultdict(list)
-        self.parent_to_child = {}
-        self.child_to_parent = {}
+        self.parent_to_child = defaultdict(set)
+        self.child_to_parent = defaultdict(set)
         self.lineage_edges = []
         self.minframe_nodes = set()
         self.node_to_lineage_id = {}
@@ -719,26 +717,27 @@ class LineagePlot:
         for node in tracker.nodes.values():
             lineage_id = node.lineage_id
 
-            # Add edges within the same cluster over consecutive frames
-            for frame in range(node.minframe, node.maxframe):
-                source = (frame, node.cluster_id)
-                target = (frame + 1, node.cluster_id)
-                self.lineage_edges.append((source, target))
-                self.all_nodes.add(source)
-                self.all_nodes.add(target)
-                self.parent_to_child.setdefault(source, set()).add(target)
-                self.child_to_parent.setdefault(target, set()).add(source)
+            # Directly connect minframe to maxframe
+            source = (node.minframe, node.cluster_id)
+            target = (node.maxframe, node.cluster_id)
+            self.lineage_edges.append((source, target))
+            self.all_nodes.add(source)
+            self.all_nodes.add(target)
+            self.parent_to_child[source].add(target)
+            self.child_to_parent[target].add(source)
 
-            # Track node persistence across frames
-            for frame in range(node.minframe, node.maxframe + 1):
-                current_node = (frame, node.cluster_id)
-                self.all_nodes.add(current_node)
-                self.frame_to_nodes[frame].append(current_node)
-                self.node_to_lineage_id[current_node] = lineage_id
-                self.node_to_cluster_id[current_node] = node.cluster_id
-                # Add to minframe_nodes if it's the first frame
-                if frame == node.minframe:
-                    self.minframe_nodes.add(current_node)
+            # Track node persistence
+            self.all_nodes.add(source)
+            self.all_nodes.add(target)
+            self.frame_to_nodes[source[0]].append(source)
+            self.frame_to_nodes[target[0]].append(target)
+            self.node_to_lineage_id[source] = lineage_id
+            self.node_to_cluster_id[source] = node.cluster_id
+            self.node_to_lineage_id[target] = lineage_id
+            self.node_to_cluster_id[target] = node.cluster_id
+
+            # Add to minframe_nodes if it's the first frame
+            self.minframe_nodes.add(source)
 
             # Add edges between parent and child clusters
             child_start_frame = node.minframe
@@ -747,8 +746,8 @@ class LineagePlot:
                 parent_end_frame = parent.maxframe
                 parent_node = (parent_end_frame, parent.cluster_id)
                 self.lineage_edges.append((parent_node, child_node))
-                self.parent_to_child.setdefault(parent_node, set()).add(child_node)
-                self.child_to_parent.setdefault(child_node, set()).add(parent_node)
+                self.parent_to_child[parent_node].add(child_node)
+                self.child_to_parent[child_node].add(parent_node)
 
         # Generate plotting lineage IDs
         self._generate_plot_lineage_ids()
@@ -773,7 +772,7 @@ class LineagePlot:
             self.node_positions[node_tuple] = (x, y)
 
     def _generate_plot_lineage_ids(self):
-        # Assign plotting lineage IDs to all nodes, ensuring continuity
+        """Assigns plotting lineage IDs to all nodes, ensuring continuity."""
         self.node_to_plot_lineage_id = {}
         self.plot_lineage_id_to_lineage_id = {}
         plot_lineage_counter = 0
@@ -834,7 +833,8 @@ class LineagePlot:
                 self.plot_lineage_id_to_lineage_id[plot_lineage_counter] = lineage_id
                 plot_lineage_counter += 1
 
-    def _assign_colors(self, tracker: LineageTracker):
+    def _assign_colors(self, tracker):
+        """Assigns colors to nodes based on the selected attribute."""
         if self.color_by == 'lineage_id':
             # Assign colors based on true lineage IDs
             unique_ids = {node.lineage_id for node in tracker.nodes.values()}
@@ -859,7 +859,8 @@ class LineagePlot:
                 color = color_map.get(node_id, self.orphan_color)
             self.node_color[node_tuple] = color
 
-    def _order_lineages_by_merging_and_splitting_events(self, tracker: LineageTracker):
+    def _order_lineages_by_merging_and_splitting_events(self, tracker):
+        """Orders the lineages to minimize overlap and crossings using hierarchical clustering."""
         # Build a lineage graph that includes both merging and splitting events
         lineage_graph = defaultdict(set)  # plot_lineage_id -> set of connected plot_lineage_ids
 
@@ -941,6 +942,7 @@ class LineagePlot:
         self.lineage_order = lineage_order
 
     def _adjust_lineage_order(self, lineage_order, lineage_graph, max_iterations=10):
+        """Iteratively adjusts the lineage order to minimize crossings."""
         # Initialize positions
         positions = {lineage_id: index for index, lineage_id in enumerate(lineage_order)}
 
@@ -962,7 +964,6 @@ class LineagePlot:
                 if lineage_id in fixed_positions:
                     continue  # Skip fixed positions
                 connected_lineages = lineage_graph[lineage_id]
-
                 if not connected_lineages:
                     continue
 
@@ -984,14 +985,17 @@ class LineagePlot:
         return lineage_order
 
     def _generate_colors(self, n: int) -> List[Tuple[float, float, float, float]]:
+        """Generates a list of distinct colors."""
         colors = []
         rng = np.random.default_rng(self.color_seed)
         for i in range(n):
-            colors.append((*colorsys.hsv_to_rgb(rng.random(), 0.8, 0.8), 1.0))
+            hue = rng.random()
+            rgb = colorsys.hsv_to_rgb(hue, 0.8, 0.8)
+            colors.append((*rgb, 1.0))
         return colors
 
     def _draw_curved_edge(self, start, end, color):
-        """Draw a curved edge between two points, with color."""
+        """Draw a curved edge between two points, with the specified color."""
         mid_x = (start[0] + end[0]) / 2
         mid_y1 = start[1] + (end[1] - start[1]) * self.curve_factor
         mid_y2 = end[1] - (end[1] - start[1]) * self.curve_factor
@@ -1003,7 +1007,7 @@ class LineagePlot:
         )
         self.ax.add_patch(patch)
 
-    def draw_tree(self, tracker: LineageTracker):
+    def draw_tree(self, tracker):
         """Draw the lineage tree based on the processed data."""
         self._process_data(tracker)
 
@@ -1014,6 +1018,7 @@ class LineagePlot:
             color = self.node_color.get(source, self.orphan_color)
             self._draw_curved_edge(source_pos, target_pos, color)
 
+        # Draw nodes
         for node in self.minframe_nodes:
             pos = self.node_positions[node]
             color = self.node_color.get(node, self.orphan_color)
