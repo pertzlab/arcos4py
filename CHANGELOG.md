@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.3.0] - 2025-09-10
+## [0.3.0] - 2025-03-26
 ### Added
 - Added support for split/merge detection
 
