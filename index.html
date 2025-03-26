@@ -296,11 +296,26 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#data-format" class="md-nav__link">
+  <a href="#new-in-arcos-with-arcospx-" class="md-nav__link">
     <span class="md-ellipsis">
-      Data Format
+      New in ARCOS with ARCOS.px 🎉
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="New in ARCOS with ARCOS.px 🎉">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#notebooks-and-reproducible-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      Notebooks and Reproducible Analysis
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -488,11 +503,26 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#data-format" class="md-nav__link">
+  <a href="#new-in-arcos-with-arcospx-" class="md-nav__link">
     <span class="md-ellipsis">
-      Data Format
+      New in ARCOS with ARCOS.px 🎉
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="New in ARCOS with ARCOS.px 🎉">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#notebooks-and-reproducible-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      Notebooks and Reproducible Analysis
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -555,32 +585,58 @@
 <a href="https://pypi.org/project/arcos4py/"><img alt="python" src="https://img.shields.io/pypi/pyversions/arcos4py.svg" /></a>
 <a href="https://github.com/bgraedel/arcos4py/actions/workflows/dev.yml"><img alt="Build Status" src="https://github.com/bgraedel/arcos4py/actions/workflows/dev.yml/badge.svg" /></a>
 <a href="https://codecov.io/github/bgraedel/arcos4py"><img alt="codecov" src="https://codecov.io/gh/bgraedel/arcos4py/branch/main/graphs/badge.svg" /></a></p>
-<p>Arcos4py is a python package to detect collective Spatio-temporal phenomena.</p>
+<p><strong>arcos4py</strong> is a Python package designed to detect and analyze collective spatiotemporal phenomena in biological imaging data.</p>
 <ul>
-<li>Documentation: <a href="https://bgraedel.github.io/arcos4py">https://bgraedel.github.io/arcos4py</a></li>
-<li>GitHub: <a href="https://github.com/bgraedel/arcos4py">https://github.com/bgraedel/arcos4py</a></li>
-<li>PyPI: <a href="https://pypi.org/project/arcos4py/">https://pypi.org/project/arcos4py/</a></li>
-<li>Free software: MIT</li>
+<li><strong>Documentation:</strong> <a href="https://bgraedel.github.io/arcos4py">https://bgraedel.github.io/arcos4py</a></li>
+<li><strong>GitHub Repository:</strong> <a href="https://github.com/bgraedel/arcos4py">https://github.com/bgraedel/arcos4py</a></li>
+<li><strong>PyPI Package:</strong> <a href="https://pypi.org/project/arcos4py/">https://pypi.org/project/arcos4py/</a></li>
+<li><strong>Free Software License:</strong> MIT</li>
 </ul>
+<hr />
 <h3 id="features">Features<a class="headerlink" href="#features" title="Permanent link">&para;</a></h3>
-<p>Automated Recognition of Collective Signalling for python (arcos4py) aims to identify collective spatial events in time-series data.
-The software identifies collective protein activation in 2- and 3D cell cultures and can track events over time. Such collective waves have been recently identified in various biological systems and have been demonstrated to play a crucial role in the maintenance of epithelial homeostasis (Gagliardi et al., 2020, Takeuchi et al., 2020, Aikin et al., 2020),
-in the acinar morphogenesis (Ender et al., 2020), osteoblast regeneration (De Simone et al., 2021), and the coordination of collective cell migration (Aoki et al., 2017, Hino et al., 2020). Arcos4py is the python equivalent of the R package ARCOS (https://github.com/dmattek/ARCOS).</p>
-<p>Despite its focus on cell signaling, the framework can also be applied to other spatiotemporally correlated phenomena.</p>
-<h3 id="data-format">Data Format<a class="headerlink" href="#data-format" title="Permanent link">&para;</a></h3>
-<p>The time series should be arranged in a long table format where each row defines the object's location, time, and optionally the measurement value.</p>
-<p>ARCOS defines an ARCOS object on which several class methods can be used to prepare the data and calculate collective events.
-Optionally the objects used in the ARCOS class can be used individually by importing them from arcos.tools</p>
+<p><strong>Automated Recognition of Collective Signalling for Python (arcos4py)</strong> identifies collective spatial events in time-series data or microscopy images. The software tracks waves of protein activity in 2D and 3D cell cultures and follows them over time.</p>
+<p>Such collective dynamics have been observed in:
+- Epithelial homeostasis (Gagliardi et al., 2020; Takeuchi et al., 2020; Aikin et al., 2020)
+- Acinar morphogenesis (Ender et al., 2020)
+- Osteoblast regeneration (De Simone et al., 2021)
+- Coordination of collective cell migration (Aoki et al., 2017; Hino et al., 2020)</p>
+<p>The R package ARCOS (<a href="https://github.com/dmattek/ARCOS">https://github.com/dmattek/ARCOS</a>) provides a similar R implementation. The <code>arcos4py</code> version includes more recent upgrades and added functionality:
+- Event tracking directly on image data
+- Split/merge detection
+- Motion prediction for robust temporal linking</p>
+<p><strong>Data format:</strong> Long-table format with object coordinates, time, and optionally measurements; or binary image sequences for pixel-level analysis.</p>
+<p><strong>Modular API:</strong> Use the full ARCOS class or individual tools via <code>arcos.tools</code>. Process binary images directly using <code>track_events_images</code> in <code>arcos4py.tools</code>.</p>
+<hr />
+<h3 id="new-in-arcos-with-arcospx-">New in ARCOS with ARCOS.px 🎉<a class="headerlink" href="#new-in-arcos-with-arcospx-" title="Permanent link">&para;</a></h3>
+<p>We recently released a major update, <strong>ARCOS.px</strong>, extending <code>arcos4py</code> to track <em>subcellular dynamic structures</em> like actin waves, podosomes, and focal adhesions directly from binarized time-lapse images.</p>
+<p><strong>Publication:</strong><br />
+Tracking Coordinated Cellular Dynamics in Time-Lapse Microscopy with ARCOS.px. <a href="https://doi.org/10.1101/2025.03.14.643386"><em>bioRxiv</em></a></p>
+<p><strong>What’s new:</strong>
+- <strong>Pixel-based tracking</strong> of discontinuous, irregular structures
+- <strong>Lineage tracking</strong> across merges and splits
+- Optional <strong>Motion prediction</strong> and frame-to-frame linking with <strong>optimal transport</strong>
+- <strong>Support for DBSCAN and HDBSCAN</strong> clustering and custom clustering methods
+- <strong>Improved memory usage and lazy evaluation</strong> for long time series
+- Integrated into <strong>Napari</strong> via the <a href="https://github.com/pertzlab/arcospx-napari"><code>arcosPx-napari plugin</code></a> plugin</p>
+<hr />
+<h4 id="notebooks-and-reproducible-analysis">Notebooks and Reproducible Analysis<a class="headerlink" href="#notebooks-and-reproducible-analysis" title="Permanent link">&para;</a></h4>
+<p>To facilitate reproducibility and provide practical examples, we have made available a collection of Jupyter notebooks that demonstrate the use of ARCOS.px in various scenarios. These notebooks cover:</p>
+<p><strong>Wave Simulation</strong>: Scripts to simulate circular &amp; directional waves, and target &amp; chaotic patterns using cellular automaton.</p>
+<p><strong>Synthetic RhoA</strong> Activity Wave: Analysis of optogenetically induced synthetic RhoA activity waves.</p>
+<p><strong>Podosome Dynamics</strong>: Tracking and analysis of podosome-like structures under different conditions.</p>
+<p><strong>Actin Wave Tracking</strong>: Tracking and analysis of actin waves in 2D and extractin temporal order.</p>
+<p>You can access these notebooks in the <a href="https://github.com/pertzlab/ARCOSpx-publication">ARCOSpx-publication</a> repository under the scripts directory.</p>
 <h3 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">&para;</a></h3>
-<p>Arcos4py can be installed from PyPI with:</p>
-<div class="highlight"><pre><span></span><code>    pip install arcos4py
-</code></pre></div>
+<p>Install from PyPI:
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>arcos4py
+</code></pre></div></p>
 <h3 id="napari-plugin">Napari Plugin<a class="headerlink" href="#napari-plugin" title="Permanent link">&para;</a></h3>
-<p>Arcos4py is also available as a Napari Plugin <a href="https://github.com/bgraedel/arcos-gui">arcos-gui</a>.
-<a href="https://github.com/bgraedel/arcos-gui">arcos-gui</a> can simplify parameter finding and visualization.</p>
+<p>Arcos4py is also available as a Napari Plugin <a href="https://github.com/pertzlab/arcos-gui">arcos-gui</a>.
+<a href="https://github.com/pertzlab/arcos-gui">arcos-gui</a> can simplify parameter finding and visualization.</p>
+<p>or images directly: <a href="https://github.com/pertzlab/arcospx-napari">arcosPx-napari</a></p>
 <p><a href="https://www.youtube.com/watch?v=hG_z_BFcAiQ"><img alt="arcos_demo" src="https://img.youtube.com/vi/hG_z_BFcAiQ/0.jpg" /></a></p>
 <h3 id="credits">Credits<a class="headerlink" href="#credits" title="Permanent link">&para;</a></h3>
-<p><a href="https://github.com/dmattek">Maciej Dobrzynski</a> created the original ARCOS algorithm.</p>
+<p><a href="https://github.com/dmattek">Maciej Dobrzynski</a> created the first version of ARCOS.</p>
 <p>This package was created with <a href="https://github.com/audreyr/cookiecutter">Cookiecutter</a> and the <a href="https://github.com/waynerv/cookiecutter-pypackage">waynerv/cookiecutter-pypackage</a> project template.</p>
 <!-- END INCLUDE -->
 

@@ -329,13 +329,13 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#basic-usage-example-of-the-main-module" class="md-nav__link">
+  <a href="#basic-usage-example-to-track-collective-events-in-time-series-data" class="md-nav__link">
     <span class="md-ellipsis">
-      Basic usage example of the main module
+      Basic usage example to track collective events in time-series data
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Basic usage example of the main module">
+    <nav class="md-nav" aria-label="Basic usage example to track collective events in time-series data">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -391,6 +391,15 @@
         
       </ul>
     </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#basic-usage-example-to-track-collective-events-in-images" class="md-nav__link">
+    <span class="md-ellipsis">
+      Basic usage example to track collective events in images
+    </span>
+  </a>
   
 </li>
         
@@ -520,13 +529,13 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#basic-usage-example-of-the-main-module" class="md-nav__link">
+  <a href="#basic-usage-example-to-track-collective-events-in-time-series-data" class="md-nav__link">
     <span class="md-ellipsis">
-      Basic usage example of the main module
+      Basic usage example to track collective events in time-series data
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Basic usage example of the main module">
+    <nav class="md-nav" aria-label="Basic usage example to track collective events in time-series data">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -586,6 +595,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#basic-usage-example-to-track-collective-events-in-images" class="md-nav__link">
+    <span class="md-ellipsis">
+      Basic usage example to track collective events in images
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#perform-calculations-without-main-class" class="md-nav__link">
     <span class="md-ellipsis">
       Perform calculations without main class
@@ -632,7 +650,7 @@
 <p>To use arcos4py in a project</p>
 <div class="highlight"><pre><span></span><code>import arcos4py
 </code></pre></div>
-<h3 id="basic-usage-example-of-the-main-module">Basic usage example of the main module<a class="headerlink" href="#basic-usage-example-of-the-main-module" title="Permanent link">&para;</a></h3>
+<h3 id="basic-usage-example-to-track-collective-events-in-time-series-data">Basic usage example to track collective events in time-series data<a class="headerlink" href="#basic-usage-example-to-track-collective-events-in-time-series-data" title="Permanent link">&para;</a></h3>
 <p>To use the main class, generate a new class instance of ARCOS</p>
 <p><div class="highlight"><pre><span></span><code>from arcos4py import ARCOS
 ts = ARCOS(data,[&quot;x, y&quot;], &#39;t&#39;, &#39;id&#39;, &#39;m&#39;, &#39;clTrackID&#39;)
@@ -802,9 +820,18 @@ print(events_df)
 </tbody>
 </table>
 <p>TrackCollev returns a pandas DataFrame object containing a column with the collecive event id.</p>
+<h3 id="basic-usage-example-to-track-collective-events-in-images">Basic usage example to track collective events in images<a class="headerlink" href="#basic-usage-example-to-track-collective-events-in-images" title="Permanent link">&para;</a></h3>
+<p>Currently there is no object oriented approach to track events in images. However, the track_events_image function can be used to track events in images.</p>
+<div class="highlight"><pre><span></span><code>from arcos4py.tools import track_events_image
+img_tracked = track_events_image(np.where(img &gt; 0, 0, 1), eps=1.5)
+</code></pre></div>
+<p>For more advanced usage, please checkout the scripts and notebooks here: <a href="https://github.com/pertzlab/ARCOSpx-publication/tree/main/scripts">ARCOSpx-publication</a></p>
 <h3 id="perform-calculations-without-main-class">Perform calculations without main class<a class="headerlink" href="#perform-calculations-without-main-class" title="Permanent link">&para;</a></h3>
 <p>All functions from the ARCOS class are also accessible individually through the tools module, such as:</p>
-<div class="highlight"><pre><span></span><code>from arcos4py.tools import trackCollev
+<p><div class="highlight"><pre><span></span><code>from arcos4py.tools import trackCollev
+</code></pre></div>
+or to directly track events in a dataframe use</p>
+<div class="highlight"><pre><span></span><code>from arcos4py import track_events_dataframe
 </code></pre></div>
 <h3 id="additional-modules">Additional modules<a class="headerlink" href="#additional-modules" title="Permanent link">&para;</a></h3>
 <p>In addition to the ARCOS algorithm and its helper classes, plots are generated with the plotting module, collective event statistics using the stats module.
