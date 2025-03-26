@@ -52,6 +52,21 @@ Tracking Coordinated Cellular Dynamics in Time-Lapse Microscopy with ARCOS.px. [
 - Integrated into **Napari** via the [`arcosPx-napari plugin`](https://github.com/pertzlab/arcospx-napari) plugin
 ---
 
+### Notebooks and Reproducible Analysis
+
+To facilitate reproducibility and provide practical examples, we have made available a collection of Jupyter notebooks that demonstrate the use of ARCOS.px in various scenarios. These notebooks cover:
+
+**Wave Simulation**: Scripts to simulate circular & directional waves, and target & chaotic patterns using cellular automaton.
+
+**Synthetic RhoA** Activity Wave: Analysis of optogenetically induced synthetic RhoA activity waves.
+
+**Podosome Dynamics**: Tracking and analysis of podosome-like structures under different conditions.
+
+**Actin Wave Tracking**: Tracking and analysis of actin waves in 2D and extractin temporal order.
+
+You can access these notebooks in the [ARCOSpx-publication](https://github.com/pertzlab/ARCOSpx-publication) repository under the scripts directory.
+
+
 ## Installation
 
 Install from PyPI:
@@ -67,21 +82,6 @@ Arcos4py is also available as a Napari Plugin [arcos-gui](https://github.com/per
 or images directly: [arcosPx-napari](https://github.com/pertzlab/arcospx-napari)
 
 [![arcos_demo](https://img.youtube.com/vi/hG_z_BFcAiQ/0.jpg)](https://www.youtube.com/watch?v=hG_z_BFcAiQ)
-
-
-## Notebooks and Reproducible Analysis
-
-To facilitate reproducibility and provide practical examples, we have made available a collection of Jupyter notebooks that demonstrate the use of ARCOS.px in various scenarios. These notebooks cover:
-
-**Wave Simulation**: Scripts to simulate circular & directional waves, and target & chaotic patterns using cellular automaton.
-
-**Synthetic RhoA** Activity Wave: Analysis of optogenetically induced synthetic RhoA activity waves.
-
-**Podosome Dynamics**: Tracking and analysis of podosome-like structures under different conditions.
-
-**Actin Wave Tracking**: Tracking and analysis of actin waves in 2D and extractin temporal order.
-
-You can access these notebooks in the [ARCOSpx-publication](https://github.com/pertzlab/ARCOSpx-publication) repository under the scripts directory.
 
 ## Credits
 
