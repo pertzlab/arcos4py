@@ -4,15 +4,15 @@
 [![pypi](https://img.shields.io/pypi/v/arcos4py.svg)](https://pypi.org/project/arcos4py/)
 [![conda-forge](https://img.shields.io/conda/vn/conda-forge/arcos4py)](https://anaconda.org/conda-forge/arcos4py)
 [![python](https://img.shields.io/pypi/pyversions/arcos4py.svg)](https://pypi.org/project/arcos4py/)
-[![Build Status](https://github.com/bgraedel/arcos4py/actions/workflows/dev.yml/badge.svg)](https://github.com/bgraedel/arcos4py/actions/workflows/dev.yml)
-[![codecov](https://codecov.io/gh/bgraedel/arcos4py/branch/main/graphs/badge.svg)](https://codecov.io/github/bgraedel/arcos4py)
+[![Build Status](https://github.com/pertzlab/arcos4py/actions/workflows/dev.yml/badge.svg)](https://github.com/pertzlab/arcos4py/actions/workflows/dev.yml)
+[![codecov](https://codecov.io/gh/pertzlab/arcos4py/branch/main/graphs/badge.svg)](https://codecov.io/github/pertzlab/arcos4py)
 
 
 
 Arcos4py is a python package to detect collective Spatio-temporal phenomena.
 
-* Documentation: <https://bgraedel.github.io/arcos4py>
-* GitHub: <https://github.com/bgraedel/arcos4py>
+* Documentation: <https://pertzlab.github.io/arcos4py>
+* GitHub: <https://github.com/pertzlab/arcos4py>
 * PyPI: <https://pypi.org/project/arcos4py/>
 * Free software: MIT
 
@@ -42,8 +42,8 @@ Arcos4py can be installed from PyPI with:
 
 Napari Plugin
 -------------
-Arcos4py is also available as a Napari Plugin [arcos-gui](https://github.com/bgraedel/arcos-gui).
-[arcos-gui](https://github.com/bgraedel/arcos-gui) can simplify parameter finding and visualization.
+Arcos4py is also available as a Napari Plugin [arcos-gui](https://github.com/pertzlab/arcos-gui).
+[arcos-gui](https://github.com/pertzlab/arcos-gui) can simplify parameter finding and visualization.
 
 
 [![arcos_demo](https://img.youtube.com/vi/hG_z_BFcAiQ/0.jpg)](https://www.youtube.com/watch?v=hG_z_BFcAiQ)
