@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.3.0] - 2025-09-10
+### Added
+- Added support for split/merge detection
+
 ## [0.2.5] - 2024-09-10
 ### Fixed
 - scikit-image dependency version
