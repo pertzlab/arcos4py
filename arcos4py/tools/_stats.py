@@ -70,8 +70,6 @@ def calculate_statistics_per_frame(
     clid_column = updated_kwargs.get("clid_column", clid_column)
     position_columns = updated_kwargs.get("position_columns", position_columns)
 
-    if data.empty:
-        raise ValueError("The input data is empty.")
     necessary_columns = [frame_column, clid_column]
     if position_columns:
         necessary_columns.extend(position_columns)
@@ -80,7 +78,17 @@ def calculate_statistics_per_frame(
         if col not in data.columns and col is not None:
             raise ValueError(f"The column '{col}' is not present in the input data.")
 
-    data = data.rename(columns={frame_column: frame_column, clid_column: clid_column})
+    if data.empty:
+        return pd.DataFrame(
+            columns=(
+                [clid_column, frame_column, "size"]
+                + [f"centroid_{col}" for col in position_columns]
+                + ["spatial_extent", "convex_hull_area", "centroid_speed", "direction"]
+                if position_columns
+                else []
+            )
+        )
+
     collid_groups = data.groupby([frame_column, clid_column])
     stats_list = []
 
@@ -206,7 +214,20 @@ def calculate_statistics(
 
     # Error handling: Check if necessary columns are present in the input data
     if data.empty:
-        raise ValueError("The input data is empty.")
+        return pd.DataFrame(
+            columns=[clid_column, "duration", "first_timepoint", "last_timepoint"]
+            + (["total_size", "min_size", "max_size", "size_variability"] if obj_id_column else [])
+            + (
+                [f'first_frame_centroid_{col}' for col in position_columns]
+                + [f'last_frame_centroid_{col}' for col in position_columns]
+                + ["centroid_speed", "direction"]
+                + [f'{t}_spatial_extent' for t in ["first_frame", "last_frame"]]
+                + [f'{t}_convex_hull_area' for t in ["first_frame", "last_frame"]]
+                if position_columns
+                else []
+            )
+        )
+
     necessary_columns = [frame_column, clid_column]
     if obj_id_column:
         necessary_columns.append(obj_id_column)
