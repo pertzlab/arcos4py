@@ -2,7 +2,7 @@
 
 __author__ = """Benjamin Graedel"""
 __email__ = "benjamin.graedel@unibe.ch"
-__version__ = '0.2.5'
+__version__ = '0.3.0'
 
 from ._plotting import LineagePlot, NoodlePlot, dataPlots, plotOriginalDetrended, statsPlots
 

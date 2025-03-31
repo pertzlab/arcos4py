@@ -2,7 +2,7 @@
 
 __author__ = """Benjamin Graedel"""
 __email__ = "benjamin.graedel@unibe.ch"
-__version__ = '0.2.5'
+__version__ = '0.3.0'
 
 from arcos4py.validation._bootstrapping import bootstrap_arcos, calculate_arcos_stats, calculate_pvalue
 from arcos4py.validation._resampling import resample_data
