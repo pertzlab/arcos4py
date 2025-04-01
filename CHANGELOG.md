@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1] - 2025-04-01
+### Added
+- Added function to export timeseries images to a folder
+
+### Changed
+- Stats functions now return empty dataframes if input is empty instead of raising an error
+
 ## [0.3.0] - 2025-03-26
 ### Added
 - Added support for split/merge detection

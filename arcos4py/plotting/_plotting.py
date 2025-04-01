@@ -39,6 +39,7 @@ import seaborn as sns
 from matplotlib.path import Path
 from scipy.cluster.hierarchy import dendrogram, linkage
 from scipy.spatial.distance import squareform
+from tqdm.auto import tqdm
 
 from ..tools._arcos4py_deprecation import handle_deprecated_params
 
@@ -423,8 +424,6 @@ class statsPlots:
         Returns:
             Axes (matplotlib.axes.Axes): Matplotlib Axes object of scatterplot
         """
-        if self.data.empty:
-            raise ValueError("Dataframe is empty")
         plot = sns.scatterplot(x=self.data[total_size], y=self.data[duration], s=point_size, *args, **kwargs)
         return plot
 
@@ -1046,3 +1045,730 @@ class LineagePlot:
     def show(self):
         """Display the plot."""
         plt.show()
+
+
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.colors import Normalize
+from matplotlib.collections import LineCollection
+import matplotlib.cm as cm
+from scipy.spatial import ConvexHull
+import numpy as np
+import os
+import math
+from typing import List, Optional, Tuple, Generator, Any
+import warnings  # Use warnings module for cleaner output
+
+# Define default constants (assuming these were defined elsewhere)
+DEFAULT_EVENT_CMAP = 'tab20'
+DEFAULT_BIN_COLOR = 'black'
+DEFAULT_ALL_CELLS_CMAP = 'viridis'
+DEFAULT_ALL_CELLS_FIXED_COLOR = 'gray'
+
+
+def _yield_animation_frames(
+    arcos_data: pd.DataFrame,
+    all_cells_data: pd.DataFrame,
+    # Column names
+    frame_col: str,
+    collid_col: str,
+    pos_cols: List[str],
+    measurement_col: Optional[str] = None,  # REQUIRED if coloring all_cells by measurement
+    bin_col: Optional[str] = None,  # Optional: only needed if plotting specific binarized cells
+    # Plotting flags
+    plot_all_cells: bool = True,
+    color_all_cells_by_measurement: bool = True,
+    plot_bin_cells: bool = True,
+    plot_events: bool = True,
+    plot_convex_hulls: bool = True,
+    # Display Parameters
+    point_size: float = 10.0,
+    event_cmap: str = DEFAULT_EVENT_CMAP,
+    event_alpha: float = 0.9,
+    hull_alpha: float = 0.8,
+    hull_linewidth_size_factor: float = 1.0,
+    bin_cell_color: str = DEFAULT_BIN_COLOR,
+    bin_cell_alpha: float = 0.7,
+    bin_cell_marker_factor: float = 0.8,
+    all_cells_cmap: str = DEFAULT_ALL_CELLS_CMAP,
+    all_cells_fixed_color: str = DEFAULT_ALL_CELLS_FIXED_COLOR,
+    all_cells_alpha: float = 0.5,
+    all_cells_marker_size_factor: float = 0.2,
+    measurement_min_max: Optional[Tuple[float, float]] = None,
+    add_measurement_colorbar: bool = True,
+) -> Generator[plt.Figure, None, None]:
+    """
+    Generates Matplotlib Figure objects for individual frames of a cell activity visualization.
+
+    Allows distinct visualization of collective events (colored by event ID),
+    optionally binarized cells (fixed color, smaller size), and background cells.
+    Background cells ('all cells') can be colored by their measurement value.
+
+    The caller is responsible for handling the yielded figure (e.g., saving to file,
+    displaying, further modification) and closing it when done to free memory.
+
+    Parameters
+    ----------
+    arcos_data : pd.DataFrame
+        DataFrame containing cell activity data, potentially including collective
+        event IDs (`collid_col`) and binarization status (`bin_col`).
+    all_cells_data : pd.DataFrame
+        DataFrame containing all cells (or a representative background set)
+        for background plotting. Must include `frame_col`, `pos_cols`, and
+        `measurement_col` if `color_all_cells_by_measurement` is True.
+    frame_col : str
+        Name of the column indicating the time frame.
+    collid_col : str
+        Name of the column indicating the collective event ID.
+        Values > 0 are treated as events.
+    pos_cols : List[str]
+        List of column names for spatial coordinates (e.g., ['x', 'y'] or ['x', 'y', 'z']).
+    measurement_col : Optional[str], optional
+        Name of the column containing the measurement value. REQUIRED if
+        `color_all_cells_by_measurement` is True. Used for coloring background cells.
+        Default None.
+    bin_col : Optional[str], optional
+        Name of the column indicating binarized activity (e.g., values > 0 mean
+        binarized). Used for `plot_bin_cells`. Default None.
+    plot_all_cells : bool, optional
+        Whether to plot the background cells from `all_cells_data`. Default True.
+    color_all_cells_by_measurement : bool, optional
+        If True and `plot_all_cells` is True, color background cells using
+        `measurement_col` and `all_cells_cmap`. Requires `measurement_col` to
+        be valid in `all_cells_data`. If False or requirements not met, uses
+        `all_cells_fixed_color`. Default True.
+    plot_bin_cells : bool, optional
+        Whether to plot cells marked active by `bin_col` but not part of a
+        collective event (`collid_col` <= 0). Requires `bin_col` to be set.
+        Default True.
+    plot_events : bool, optional
+        Whether to plot cells identified as part of collective events
+        (`collid_col` > 0). Default True.
+    plot_convex_hulls : bool, optional
+        Whether to draw convex hulls around collective events (2D only).
+        Default True.
+    point_size : float, optional
+        Base size for plotted points (event cells). Default 10.0.
+    event_cmap : str, optional
+        Name of the Matplotlib colormap used to assign unique colors to
+        different collective event IDs. Default 'tab20'.
+    event_alpha : float, optional
+        Alpha transparency for event cells. Default 0.9.
+    hull_alpha : float, optional
+        Alpha transparency for convex hull lines. Default 0.8.
+    hull_linewidth : float, optional
+        Line width for convex hull lines. Default 1.0.
+    bin_cell_color : str, optional
+        Color for binarized (non-event) cells. Default 'black'.
+    bin_cell_alpha : float, optional
+        Alpha transparency for binarized (non-event) cells. Default 0.7.
+    bin_cell_marker_factor : float, optional
+        Size multiplier for binarized (non-event) cells relative to `point_size`.
+        Default 0.8.
+    all_cells_cmap : str, optional
+        Name of the Matplotlib colormap used for background cells when
+        `color_all_cells_by_measurement` is True. Default 'viridis'.
+    all_cells_fixed_color : str, optional
+        Color for background cells if `color_all_cells_by_measurement` is False
+        or requirements are not met. Default 'gray'.
+    all_cells_alpha : float, optional
+        Alpha transparency for background cells. Default 0.5.
+    all_cells_marker_size_factor : float, optional
+        Size multiplier for background cells relative to `point_size`. Default 0.2.
+    measurement_min_max : Optional[Tuple[float, float]], optional
+        Manual min/max values for the measurement colormap normalization. If None,
+        the range is determined from `all_cells_data[measurement_col]`. Default None.
+    add_measurement_colorbar : bool, optional
+        If True and coloring all cells by measurement, add a static colorbar
+        to the figure. Default True.
+    Yields
+    ------
+    matplotlib.figure.Figure
+        The Matplotlib Figure object for the current frame, containing the plotted data.
+        The caller should handle this figure (e.g., `fig.savefig(...)`, `plt.show()`, `plt.close(fig)`).
+
+    Raises
+    ------
+    ValueError
+        If input parameters are invalid (e.g., `pos_cols` structure).
+    StopIteration
+        When all frames have been processed or if aborted.
+
+    Examples
+    --------
+    >>> # Assuming arcos_data, all_cells_data are prepared DataFrames
+    >>> output_folder = "animation_frames"
+    >>> os.makedirs(output_folder, exist_ok=True)
+    >>> frame_generator = yield_animation_frames(
+    ...     arcos_data=arcos_data,
+    ...     all_cells_data=all_cells_data,
+    ...     frame_col='time',
+    ...     collid_col='cl_id',
+    ...     pos_cols=['x', 'y'],
+    ...     measurement_col='intensity',
+    ...     # ... other parameters ...
+    ... )
+    >>>
+    >>> for i, fig in enumerate(frame_generator):
+    ...     frame_num = fig.axes[0].get_title().split(': ')[-1] # Get frame num from title
+    ...     filename = os.path.join(output_folder, f"frame_{frame_num}.png")
+    ...     try:
+    ...         print(f"Saving frame {frame_num} to {filename}")
+    ...         fig.savefig(filename, dpi=150, bbox_inches='tight')
+    ...     except Exception as e:
+    ...         print(f"Error saving frame {frame_num}: {e}")
+    ...     finally:
+    ...         plt.close(fig) # IMPORTANT: Close figure to free memory
+    >>> print("Finished processing frames.")
+    """
+    # --- Input Validation and Setup ---
+    if arcos_data.empty and (not plot_all_cells or all_cells_data.empty):
+        warnings.warn(
+            "No data to plot (ARCOS empty, and not plotting all cells or all_cells empty). Generator will yield no frames."
+        )
+        return  # StopIteration is implicitly raised
+
+    # Validate columns needed for specific plotting options
+    _plot_bin_cells = plot_bin_cells  # Use temporary variables to modify flags locally
+    if _plot_bin_cells and (bin_col is None or bin_col not in arcos_data.columns):
+        warnings.warn(
+            f"'plot_bin_cells' is True, but 'bin_col' ('{bin_col}') is not specified or not found in arcos_data. Disabling plot_bin_cells."
+        )
+        _plot_bin_cells = False
+
+    _plot_events = plot_events
+    if _plot_events and (collid_col is None or collid_col not in arcos_data.columns):
+        warnings.warn(
+            f"'plot_events' is True, but 'collid_col' ('{collid_col}') is not found in arcos_data. Disabling plot_events."
+        )
+        _plot_events = False
+
+    _plot_convex_hulls = plot_convex_hulls
+    if _plot_convex_hulls and not _plot_events:
+        warnings.warn(
+            "'plot_convex_hulls' is True, but 'plot_events' is False. Hulls require events. Disabling hull plotting."
+        )
+        _plot_convex_hulls = False
+
+    if not isinstance(pos_cols, list) or not (2 <= len(pos_cols) <= 3):
+        raise ValueError(f"`pos_cols` must be a list of 2 or 3 column names, got {pos_cols}")
+
+    # Validate requirements for coloring all cells by measurement
+    can_color_all_by_meas = False
+    if plot_all_cells and color_all_cells_by_measurement:
+        if all_cells_data.empty:
+            warnings.warn(
+                f"'color_all_cells_by_measurement' is True, but 'all_cells_data' is empty. Cannot color by measurement. Falling back to fixed color."
+            )
+        elif measurement_col is None:
+            warnings.warn(
+                f"'color_all_cells_by_measurement' is True, but 'measurement_col' is not specified. Cannot color by measurement. Falling back to fixed color."
+            )
+        elif measurement_col not in all_cells_data.columns:
+            warnings.warn(
+                f"'color_all_cells_by_measurement' is True, but 'measurement_col' ('{measurement_col}') not found in 'all_cells_data'. Falling back to fixed color."
+            )
+        elif all_cells_data[measurement_col].isnull().all():
+            warnings.warn(
+                f"'color_all_cells_by_measurement' is True, but 'measurement_col' ('{measurement_col}') contains only NaN values in 'all_cells_data'. Falling back to fixed color."
+            )
+        else:
+            can_color_all_by_meas = True  # All checks passed
+
+    # --- Data Preparation ---
+    is_3d = len(pos_cols) == 3
+
+    # Create copies to avoid modifying original dataframes
+    arcos_data_copy = arcos_data.copy() if not arcos_data.empty else pd.DataFrame()
+    all_cells_data_copy = all_cells_data.copy() if not all_cells_data.empty else pd.DataFrame()
+
+    # Determine frame range
+    min_frame = float("inf")
+    max_frame = float("-inf")
+
+    if not arcos_data_copy.empty and frame_col in arcos_data_copy:
+        min_frame = min(min_frame, arcos_data_copy[frame_col].min())
+        max_frame = max(max_frame, arcos_data_copy[frame_col].max())
+
+    if plot_all_cells and not all_cells_data_copy.empty and frame_col in all_cells_data_copy:
+        min_frame = min(min_frame, all_cells_data_copy[frame_col].min())
+        max_frame = max(max_frame, all_cells_data_copy[frame_col].max())
+
+    if min_frame == float("inf") or max_frame == float("-inf"):
+        warnings.warn(
+            f"Could not determine frame range (no data with frame column '{frame_col}'?). Generator will yield no frames."
+        )
+        return  # StopIteration is implicitly raised
+
+    min_frame = int(min_frame)
+    max_frame = int(max_frame)
+    frames = range(min_frame, max_frame + 1)
+    num_frames = len(frames)
+
+    # Group data by frame for faster access
+    arcos_data_grouped = arcos_data_copy.groupby(frame_col) if not arcos_data_copy.empty else None
+    all_cells_grouped = (
+        all_cells_data_copy.groupby(frame_col) if plot_all_cells and not all_cells_data_copy.empty else None
+    )
+
+    # --- Plotting Setup ---
+    fig = None  # Initialize fig to None
+    try:
+        fig = plt.figure(figsize=(9, 8) if add_measurement_colorbar and can_color_all_by_meas else (8, 8))
+        ax = fig.add_subplot(111, projection="3d" if is_3d else None)
+        cax = None  # Axes for colorbar (only created if needed)
+
+        # Determine global axis limits (do this ONCE before the loop)
+        all_pos_data = []
+        if not arcos_data_copy.empty:
+            all_pos_data.append(arcos_data_copy[pos_cols])
+        if plot_all_cells and not all_cells_data_copy.empty:
+            all_pos_data.append(all_cells_data_copy[pos_cols])
+
+        if not all_pos_data:
+            warnings.warn(
+                f"No position data available ({pos_cols}) to determine axis limits. Generator will yield no frames."
+            )
+            return  # StopIteration
+
+        combined_pos = pd.concat(all_pos_data).dropna(subset=pos_cols)
+        if combined_pos.empty:
+            warnings.warn(
+                f"Position data in columns {pos_cols} is empty or all NaN after combining. Cannot determine limits. Generator will yield no frames."
+            )
+            return  # StopIteration
+
+        x_min, x_max = combined_pos[pos_cols[0]].min(), combined_pos[pos_cols[0]].max()
+        y_min, y_max = combined_pos[pos_cols[1]].min(), combined_pos[pos_cols[1]].max()
+        z_min, z_max = (combined_pos[pos_cols[2]].min(), combined_pos[pos_cols[2]].max()) if is_3d else (None, None)
+
+        # Add padding to limits
+        x_range = x_max - x_min
+        y_range = y_max - y_min
+        z_range = (z_max - z_min) if is_3d and z_min is not None and z_max is not None else 0.0
+
+        # Handle cases where range is zero or very small
+        padding_x = x_range * 0.05 if x_range > 1e-9 else 1.0
+        padding_y = y_range * 0.05 if y_range > 1e-9 else 1.0
+        padding_z = z_range * 0.05 if is_3d and z_range > 1e-9 else 1.0
+
+        ax_limits = {'xlim': (x_min - padding_x, x_max + padding_x), 'ylim': (y_min - padding_y, y_max + padding_y)}
+        if is_3d:
+            ax_limits['zlim'] = (z_min - padding_z, z_max + padding_z)
+
+        # --- Colormap and Normalization Setup ---
+
+        # Event Colormap
+        try:
+            cmap_events = plt.get_cmap(event_cmap)
+            # Estimate number of colors needed (max clid or fallback)
+            max_clid = 0
+            if _plot_events and not arcos_data_copy.empty and collid_col in arcos_data_copy:
+                # Ensure we handle NaN before max()
+                valid_clids = arcos_data_copy[collid_col].dropna()
+                max_clid = int(valid_clids.max()) if not valid_clids.empty else 0
+            num_event_colors = max(20, max_clid + 1)  # Use at least 20 colors
+        except ValueError:
+            warnings.warn(f"Event colormap '{event_cmap}' not found. Using default '{DEFAULT_EVENT_CMAP}'.")
+            cmap_events = plt.get_cmap(DEFAULT_EVENT_CMAP)
+            num_event_colors = cmap_events.N if hasattr(cmap_events, "N") else 20
+
+        # All Cells Colormap (by measurement)
+        cmap_all_cells = None
+        norm_all_cells = None
+        meas_min = meas_max = None
+        _can_color_all_by_meas = can_color_all_by_meas  # Use local copy of flag
+        if _can_color_all_by_meas:
+            try:
+                cmap_all_cells = plt.get_cmap(all_cells_cmap)
+                if measurement_min_max:
+                    meas_min, meas_max = measurement_min_max
+                    if meas_min is None or meas_max is None:
+                        warnings.warn("Incomplete 'measurement_min_max' provided. Determining range from data.")
+                        meas_min, meas_max = None, None  # Force recalculation
+                if meas_min is None or meas_max is None:
+                    valid_meas = all_cells_data_copy[measurement_col].dropna()
+                    if not valid_meas.empty:
+                        meas_min = valid_meas.min()
+                        meas_max = valid_meas.max()
+                    else:  # Should have been caught earlier, but double check
+                        warnings.warn(
+                            f"Could not determine measurement range for {measurement_col}. Falling back to fixed color."
+                        )
+                        _can_color_all_by_meas = False  # Update local flag
+
+                if _can_color_all_by_meas:
+                    # Handle case where min == max
+                    if abs(meas_max - meas_min) < 1e-9:
+                        meas_min -= 0.5
+                        meas_max += 0.5
+                    norm_all_cells = Normalize(vmin=meas_min, vmax=meas_max)
+                    print(
+                        f"Coloring 'all cells' by '{measurement_col}' using '{all_cells_cmap}' cmap (Range: {meas_min:.2f} - {meas_max:.2f})"
+                    )
+
+            except ValueError:
+                warnings.warn(f"All cells colormap '{all_cells_cmap}' not found. Falling back to fixed color.")
+                _can_color_all_by_meas = False
+            except Exception as e:
+                warnings.warn(f"Error setting up measurement colormap: {e}. Falling back to fixed color.")
+                _can_color_all_by_meas = False
+
+        # Add static colorbar axes if needed (do this *once*)
+        if add_measurement_colorbar and _can_color_all_by_meas and cmap_all_cells and norm_all_cells:
+            fig.subplots_adjust(right=0.85)
+            cbar_ax = fig.add_axes([0.88, 0.15, 0.03, 0.7])
+            sm = cm.ScalarMappable(cmap=cmap_all_cells, norm=norm_all_cells)
+            sm.set_array([])
+            cbar = fig.colorbar(sm, cax=cbar_ax)
+            cbar.set_label(measurement_col or "Measurement")
+        else:
+            # Ensure default positioning if no colorbar
+            fig.subplots_adjust(right=0.95)  # Or adjust as needed
+
+        # Marker sizes
+        all_cells_size = point_size * all_cells_marker_size_factor
+        bin_cell_size = point_size * bin_cell_marker_factor
+        hull_linewidth = point_size * hull_linewidth_size_factor
+        event_cell_size = point_size
+
+        # --- Frame Yield Loop ---
+        for i, frame in enumerate(frames):
+            # --- Clear axes content for the new frame ---
+            # Important: Clear only the main axes (ax), not the colorbar axes (cax) if it exists
+            ax.clear()
+
+            # Get data for the current frame
+            current_arcos_frame = pd.DataFrame()
+            current_all_cells_frame = pd.DataFrame()
+
+            if arcos_data_grouped and frame in arcos_data_grouped.groups:
+                current_arcos_frame = arcos_data_grouped.get_group(frame)
+            if all_cells_grouped and frame in all_cells_grouped.groups:
+                current_all_cells_frame = all_cells_grouped.get_group(frame)
+
+            # --- Plotting Order: Background to Foreground ---
+
+            # 1. Plot "all cells" (background)
+            if plot_all_cells and not current_all_cells_frame.empty:
+                valid_cells = current_all_cells_frame.dropna(subset=pos_cols)
+                if _can_color_all_by_meas and measurement_col in valid_cells:
+                    valid_cells = valid_cells.dropna(subset=[measurement_col])
+                    if not valid_cells.empty:
+                        measurements = valid_cells[measurement_col].values
+                        colors = cmap_all_cells(norm_all_cells(measurements))
+                        scatter_args = {"s": all_cells_size, "c": colors, "alpha": all_cells_alpha, "marker": "."}
+                        if is_3d:
+                            ax.scatter(
+                                valid_cells[pos_cols[0]],
+                                valid_cells[pos_cols[1]],
+                                valid_cells[pos_cols[2]],
+                                **scatter_args,
+                            )
+                        else:
+                            ax.scatter(valid_cells[pos_cols[0]], valid_cells[pos_cols[1]], **scatter_args)
+                elif not valid_cells.empty:  # Fallback to fixed color
+                    scatter_args = {
+                        "s": all_cells_size,
+                        "c": all_cells_fixed_color,
+                        "alpha": all_cells_alpha,
+                        "marker": ".",
+                    }
+                    if is_3d:
+                        ax.scatter(
+                            valid_cells[pos_cols[0]], valid_cells[pos_cols[1]], valid_cells[pos_cols[2]], **scatter_args
+                        )
+                    else:
+                        ax.scatter(valid_cells[pos_cols[0]], valid_cells[pos_cols[1]], **scatter_args)
+
+            # 2. Plot "binarized only" cells
+            if _plot_bin_cells and not current_arcos_frame.empty:
+                bin_only_cells = pd.DataFrame()
+                if bin_col in current_arcos_frame and collid_col in current_arcos_frame:
+                    bin_only_cells = current_arcos_frame[
+                        (current_arcos_frame[collid_col].fillna(0) <= 0) & (current_arcos_frame[bin_col].fillna(0) > 0)
+                    ]
+                if not bin_only_cells.empty:
+                    valid_cells = bin_only_cells.dropna(subset=pos_cols)
+                    if not valid_cells.empty:
+                        scatter_args = {"s": bin_cell_size, "c": bin_cell_color, "alpha": bin_cell_alpha, "marker": "o"}
+                        if is_3d:
+                            ax.scatter(
+                                valid_cells[pos_cols[0]],
+                                valid_cells[pos_cols[1]],
+                                valid_cells[pos_cols[2]],
+                                **scatter_args,
+                            )
+                        else:
+                            ax.scatter(valid_cells[pos_cols[0]], valid_cells[pos_cols[1]], **scatter_args)
+
+            # 3. Plot event cells and hulls
+            if _plot_events and not current_arcos_frame.empty:
+                event_cells = pd.DataFrame()
+                if collid_col in current_arcos_frame:
+                    event_cells = current_arcos_frame[current_arcos_frame[collid_col].fillna(0) > 0]
+
+                if not event_cells.empty:
+                    unique_event_ids = event_cells[collid_col].unique()
+                    unique_event_ids = unique_event_ids[unique_event_ids > 0]  # Ensure positive IDs
+
+                    plotted_hulls = []
+                    n_cmap_colors = cmap_events.N if hasattr(cmap_events, "N") else num_event_colors
+
+                    for clid in unique_event_ids:
+                        event_points_df = event_cells[event_cells[collid_col] == clid].dropna(subset=pos_cols)
+                        if event_points_df.empty:
+                            continue
+
+                        event_points = event_points_df[pos_cols].values
+                        color_index = int(clid) % n_cmap_colors
+                        color = cmap_events(color_index)
+
+                        scatter_args = {"s": event_cell_size, "c": [color], "alpha": event_alpha, "marker": "o"}
+                        if is_3d:
+                            ax.scatter(event_points[:, 0], event_points[:, 1], event_points[:, 2], **scatter_args)
+                        else:
+                            ax.scatter(event_points[:, 0], event_points[:, 1], **scatter_args)
+
+                        if _plot_convex_hulls and not is_3d:
+                            if len(event_points) >= 3:
+                                try:
+                                    hull = ConvexHull(event_points[:, 0:2])  # Ensure 2D points for hull
+                                    for simplex in hull.simplices:
+                                        plotted_hulls.append((event_points[simplex, 0:2], color))
+                                except Exception:
+                                    # warnings.warn(f"Could not compute Convex Hull for event {clid} in frame {frame}: {e}", RuntimeWarning)
+                                    pass  # Often fails for degenerate cases, ignore in animation
+
+                    if _plot_convex_hulls and plotted_hulls and not is_3d:
+                        segments = [item[0] for item in plotted_hulls]
+                        hull_colors = [item[1] for item in plotted_hulls]
+                        lc = LineCollection(segments, colors=hull_colors, linewidths=hull_linewidth, alpha=hull_alpha)
+                        ax.add_collection(lc)
+
+            # --- Set consistent limits and labels ---
+            ax.set(**ax_limits)  # Apply pre-calculated limits
+            ax.set_xlabel(pos_cols[0])
+            ax.set_ylabel(pos_cols[1])
+            if is_3d:
+                ax.set_zlabel(pos_cols[2])
+            ax.set_title(f"Frame: {frame}")  # Add frame number to title
+
+            # --- Yield the figure ---
+            yield fig
+
+    finally:
+        # --- Cleanup ---
+        # Ensure the figure created by the generator is closed if the
+        # generator exits (normally or via exception/break)
+        if fig is not None:
+            plt.close(fig)
+
+
+def save_animation_frames(
+    arcos_data: pd.DataFrame,
+    all_cells_data: pd.DataFrame,
+    output_dir: str,
+    # --- Parameters passed to yield_animation_frames ---
+    frame_col: str,
+    collid_col: str,
+    pos_cols: List[str],
+    measurement_col: Optional[str] = None,
+    bin_col: Optional[str] = None,
+    plot_all_cells: bool = True,
+    color_all_cells_by_measurement: bool = True,
+    plot_bin_cells: bool = True,
+    plot_events: bool = True,
+    plot_convex_hulls: bool = True,
+    point_size: float = 10.0,
+    event_cmap: str = DEFAULT_EVENT_CMAP,
+    event_alpha: float = 0.9,
+    hull_alpha: float = 0.8,
+    hull_linewidth_size_factor: float = 1.0,
+    bin_cell_color: str = DEFAULT_BIN_COLOR,
+    bin_cell_alpha: float = 0.7,
+    bin_cell_marker_factor: float = 0.8,
+    all_cells_cmap: str = DEFAULT_ALL_CELLS_CMAP,
+    all_cells_fixed_color: str = DEFAULT_ALL_CELLS_FIXED_COLOR,
+    all_cells_alpha: float = 0.5,
+    all_cells_marker_size_factor: float = 0.2,
+    measurement_min_max: Optional[Tuple[float, float]] = None,
+    add_measurement_colorbar: bool = True,
+    # --- Parameters for the save function itself ---
+    filename_prefix: str = "frame",
+    dpi: int = 150,
+    abort_flag: Optional[Any] = None,  # Pass this down to the generator too
+) -> None:
+    """
+    Generates and saves individual frames of a cell activity visualization as PNG images.
+
+    This function acts as a caller for the `yield_animation_frames` generator.
+    It handles the iteration over frames, saving each frame to a file with
+    appropriate naming and padding, and ensures figures are closed to free memory.
+
+    Parameters
+    ----------
+    arcos_data : pd.DataFrame
+        Passed to `yield_animation_frames`.
+    all_cells_data : pd.DataFrame
+        Passed to `yield_animation_frames`.
+    output_dir : str
+        Path to the directory where PNG frames will be saved. Will be created if it
+        doesn't exist.
+    frame_col : str
+        Passed to `yield_animation_frames`.
+    collid_col : str
+        Passed to `yield_animation_frames`.
+    pos_cols : List[str]
+        Passed to `yield_animation_frames`.
+    measurement_col : Optional[str], optional
+        Passed to `yield_animation_frames`.
+    bin_col : Optional[str], optional
+        Passed to `yield_animation_frames`.
+    plot_all_cells : bool, optional
+        Passed to `yield_animation_frames`. Default True.
+    color_all_cells_by_measurement : bool, optional
+        Passed to `yield_animation_frames`. Default True.
+    plot_bin_cells : bool, optional
+        Passed to `yield_animation_frames`. Default True.
+    plot_events : bool, optional
+        Passed to `yield_animation_frames`. Default True.
+    plot_convex_hulls : bool, optional
+        Passed to `yield_animation_frames`. Default True.
+    point_size : float, optional
+        Passed to `yield_animation_frames`. Default 10.0.
+    event_cmap : str, optional
+        Passed to `yield_animation_frames`. Default 'tab20'.
+    event_alpha : float, optional
+        Passed to `yield_animation_frames`. Default 0.9.
+    hull_alpha : float, optional
+        Passed to `yield_animation_frames`. Default 0.8.
+    hull_linewidth : float, optional
+        Passed to `yield_animation_frames`. Default 1.0.
+    bin_cell_color : str, optional
+        Passed to `yield_animation_frames`. Default 'black'.
+    bin_cell_alpha : float, optional
+        Passed to `yield_animation_frames`. Default 0.7.
+    bin_cell_marker_factor : float, optional
+        Passed to `yield_animation_frames`. Default 0.8.
+    all_cells_cmap : str, optional
+        Passed to `yield_animation_frames`. Default 'viridis'.
+    all_cells_fixed_color : str, optional
+        Passed to `yield_animation_frames`. Default 'gray'.
+    all_cells_alpha : float, optional
+        Passed to `yield_animation_frames`. Default 0.5.
+    all_cells_marker_size_factor : float, optional
+        Passed to `yield_animation_frames`. Default 0.2.
+    measurement_min_max : Optional[Tuple[float, float]], optional
+        Passed to `yield_animation_frames`. Default None.
+    add_measurement_colorbar : bool, optional
+        Passed to `yield_animation_frames`. Default True.
+    filename_prefix : str, optional
+        Prefix for the output PNG files. Default "frame".
+    dpi : int, optional
+        Dots per inch for the output PNGs. Default 150.
+    abort_flag : Optional[Any], optional
+        An object with an `is_set()` method (like `threading.Event` or the example
+        `AbortFlag` class). If `abort_flag.is_set()` returns True, saving will stop.
+        Passed to `yield_animation_frames`. Default None.
+
+    Returns
+    -------
+    None
+    """
+    # --- Setup Output Directory ---
+    try:
+        os.makedirs(output_dir, exist_ok=True)
+        print(f"Saving animation frames to directory: {output_dir}")
+    except OSError as e:
+        print(f"Error creating output directory '{output_dir}': {e}")
+        return  # Cannot proceed without output directory
+
+    # --- Determine Frame Range and Padding (needed for filenames) ---
+    # This duplicates a small part of the generator's logic, but is necessary
+    # to format filenames correctly *before* the loop starts.
+    min_frame_val = float("inf")
+    max_frame_val = float("-inf")
+    if not arcos_data.empty and frame_col in arcos_data:
+        min_frame_val = min(min_frame_val, arcos_data[frame_col].min())
+        max_frame_val = max(max_frame_val, arcos_data[frame_col].max())
+    if not all_cells_data.empty and frame_col in all_cells_data:
+        min_frame_val = min(min_frame_val, all_cells_data[frame_col].min())
+        max_frame_val = max(max_frame_val, all_cells_data[frame_col].max())
+
+    if min_frame_val == float("inf") or max_frame_val == float("-inf"):
+        # Generator will also warn, but we add a message here too.
+        print(f"Could not determine frame range from input data. No frames will be saved.")
+        return
+
+    num_total_frames = int(max_frame_val) - int(min_frame_val) + 1
+    padding_digits = (
+        math.ceil(math.log10(max(1, int(max_frame_val)) + 1)) if max_frame_val >= 0 else 1
+    )  # Calculate padding based on max frame number
+
+    # --- Instantiate the Generator ---
+    frame_generator = _yield_animation_frames(
+        arcos_data=arcos_data,
+        all_cells_data=all_cells_data,
+        frame_col=frame_col,
+        collid_col=collid_col,
+        pos_cols=pos_cols,
+        measurement_col=measurement_col,
+        bin_col=bin_col,
+        plot_all_cells=plot_all_cells,
+        color_all_cells_by_measurement=color_all_cells_by_measurement,
+        plot_bin_cells=plot_bin_cells,
+        plot_events=plot_events,
+        plot_convex_hulls=plot_convex_hulls,
+        point_size=point_size,
+        event_cmap=event_cmap,
+        event_alpha=event_alpha,
+        hull_alpha=hull_alpha,
+        hull_linewidth_size_factor=hull_linewidth_size_factor,
+        bin_cell_color=bin_cell_color,
+        bin_cell_alpha=bin_cell_alpha,
+        bin_cell_marker_factor=bin_cell_marker_factor,
+        all_cells_cmap=all_cells_cmap,
+        all_cells_fixed_color=all_cells_fixed_color,
+        all_cells_alpha=all_cells_alpha,
+        all_cells_marker_size_factor=all_cells_marker_size_factor,
+        measurement_min_max=measurement_min_max,
+        add_measurement_colorbar=add_measurement_colorbar,
+    )
+
+    # --- Iterate, Save, and Close ---
+    saved_frame_count = 0
+    print(f"Starting frame generation and saving (estimated {num_total_frames} frames)...")
+
+    for fig in tqdm(frame_generator, desc="Saving frames", total=num_total_frames, unit="frame"):
+        # Get frame number from the figure title (set by the generator)
+        try:
+            title = fig.axes[0].get_title()
+            # Handle potential variations in title format slightly more robustly
+            frame_num_str = title.split(':')[-1].strip()
+            frame_num = int(frame_num_str)
+        except (IndexError, ValueError, AttributeError) as e:
+            warnings.warn(
+                f"Could not reliably determine frame number from figure title ('{title}'). Using counter. Error: {e}"
+            )
+            # Fallback to a simple counter if title parsing fails
+            frame_num = saved_frame_count + int(min_frame_val)  # Estimate frame num
+
+        # Construct filename with padding
+        frame_filename = f"{filename_prefix}_{frame_num:0{padding_digits}d}.png"
+        output_path = os.path.join(output_dir, frame_filename)
+
+        # Save the figure
+        try:
+            fig.savefig(output_path, dpi=dpi, bbox_inches='tight')
+            saved_frame_count += 1
+        except Exception as e:
+            print(f"\nError saving frame {output_path}: {e}")
+            # Decide whether to continue or stop on error (here we continue)
+        finally:
+            # CRITICAL: Close the figure to free memory, regardless of save success
+            plt.close(fig)
+
+    print(f"\nFinished saving {saved_frame_count} frames to {output_dir}.")
+    if saved_frame_count == 0:
+        print("Note: No frames were generated or saved. Check input data and parameters.")
