@@ -1551,8 +1551,10 @@ def _yield_animation_frames(  # noqa: C901
 
     finally:
         # Close the figure if the generator exits prematurely or normally
-        if 'fig' in locals() and plt.fignum_exists(fig.number):
+        try:
             plt.close(fig)
+        except Exception as e:
+            warnings.warn(f"Error closing figure: {e}.")
 
 
 def save_animation_frames(
