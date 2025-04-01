@@ -15,7 +15,7 @@ import warnings
 from abc import ABC, abstractmethod
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Generator, List, Tuple, Union
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -719,7 +719,7 @@ class LineageTracker:
 
         # Add parent columns
         for i in range(self.max_parents_count):
-            column_name = f'parent_{i+1}'
+            column_name = f'parent_{i + 1}'
             df[column_name] = [parents[i] for parents in parent_ids]
 
         # Add lineage column
@@ -2158,174 +2158,301 @@ class detectCollev:
             )
 
 
-def _nearest_neighbour_eps(
+def _get_kth_neighbor_distance(
     X: np.ndarray,
-    nbr_nearest_neighbours: int = 1,
-):
-    kdB = KDTree(data=X)
-    nearest_neighbours, indices = kdB.query(X, k=nbr_nearest_neighbours)
-    return nearest_neighbours[:, 1:]
+    k: int = 1,
+) -> np.ndarray:
+    """Calculates the distance to the k-th nearest neighbor for each point in X.
+
+    Args:
+        X (np.ndarray): Array of points (n_samples, n_features).
+        k (int): The 'k' in k-th nearest neighbor.
+
+    Returns:
+        np.ndarray: Array of distances to the k-th neighbor for each point.
+                    Returns empty array if not enough points (X.shape[0] <= k).
+    """
+    n_samples = X.shape[0]
+    # Need at least k+1 points (k neighbors + the point itself)
+    if n_samples <= k:
+        # Return empty array or handle as appropriate for the caller
+        # Here, returning empty array aligns with the list comprehension logic below
+        return np.array([], dtype=np.float64)
+
+    try:
+        # Query for k+1 neighbors (including self)
+        kd_tree = KDTree(data=X)
+        # k+1 because query includes the point itself at distance 0
+        distances, _ = kd_tree.query(X, k=k + 1)
+
+        # The k-th neighbor's distance is the last column (index k)
+        # Handle cases where k+1 > n_samples (KDTree might return fewer columns)
+        if distances.shape[1] > k:
+            kth_distances = distances[:, k]
+            return kth_distances
+        else:
+            # This case should ideally be caught by the n_samples <= k check,
+            # but as a safeguard:
+            warnings.warn(
+                f"Could not retrieve {k}-th neighbor distance reliably for all points (shape: {X.shape}, k: {k})."
+            )
+            # Return valid distances found, padding potentially needed if used differently
+            # For current use, return empty, as the frame is unreliable
+            return np.array([], dtype=np.float64)
+
+    except Exception as e:
+        # Catch potential KDTree errors, e.g., with insufficient unique points
+        warnings.warn(f"KDTree query failed for shape {X.shape}, k={k}: {e}")
+        return np.array([], dtype=np.float64)
 
 
-def estimate_eps(
-    data: pd.DataFrame,
-    method: str = 'kneepoint',
-    position_columns: list[str] = ['x,y'],
-    frame_column: str = 't',
+# Helper function 2: Binarize image and get coordinates
+def _binarize_image_to_coords(image: np.ndarray, threshold: float = 0) -> np.ndarray:
+    """Converts an image to binary based on a threshold and extracts coordinates\
+    of pixels above the threshold.
+
+    Args:
+        image (np.ndarray): Input image (2D).
+        threshold (float): Threshold value. Pixels > threshold become 1.
+
+    Returns:
+        np.ndarray: Array of coordinates (n_pixels, n_dimensions) where pixels > threshold.
+                    Returns empty array (shape (0, ndim)) if no pixels > threshold.
+    """
+    if image.ndim != 2:
+        raise ValueError("Input image must be 2D.")
+    # np.where returns tuple of arrays, one per dimension
+    coords_tuple = np.where(image > threshold)
+    # np.column_stack converts the tuple into a (N, ndim) array
+    coords = np.column_stack(coords_tuple)
+    return coords
+
+
+def estimate_eps(  # noqa: C901
+    data: Optional[pd.DataFrame] = None,
+    image: Optional[np.ndarray] = None,
+    method: str = "kneepoint",
+    position_columns: Optional[list[str]] = None,
+    frame_column: str = "t",
     n_neighbors: int = 5,
     plot: bool = True,
     plt_size: tuple[int, int] = (5, 5),
-    max_samples=50_000,
-    **kwargs: dict,
-):
-    """Estimates eps parameter in DBSCAN.
+    max_samples: int = 50_000,
+    binarize_threshold: float = 0,
+    **kwargs: Any,
+) -> float:
+    """Estimates eps parameter for DBSCAN using the k-distance graph method.
 
-    Estimates the eps parameter for the DBSCAN clustering method, as used by ARCOS,
-    by calculating the nearest neighbour distances for each point in the data.
-    N_neighbours should be chosen to match the minimum point size in DBSCAN
-    or the minimum clustersize in detect_events respectively.
-    The method argument determines how the eps parameter is estimated.
-    'kneepoint' estimates the knee of the nearest neighbour distribution.
-    'mean' and 'median' return (by default) 1.5 times
-    the mean or median of the nearest neighbour distances respectively.
+    Works with either point data in a DataFrame or pixel data from an image/image series.
 
-    Arguments:
-        data (pd.DataFrame): DataFrame containing the data.
-        method (str, optional): Method to use for estimating eps. Defaults to 'kneepoint'.
-            Can be one of ['kneepoint', 'mean', 'median'].'kneepoint' estimates the knee of the nearest neighbour
-            distribution to to estimate eps. 'mean' and 'median' use the 1.5 times the mean or median of the
-            nearest neighbour distances respectively.
-        position_columns (list[str]): List of column names containing the position data.
-        frame_column (str, optional): Name of the column containing the frame number. Defaults to 't'.
-        n_neighbors (int, optional): Number of nearest neighbours to consider. Defaults to 5.
-        plot (bool, optional): Whether to plot the results. Defaults to True.
-        plt_size (tuple[int, int], optional): Size of the plot. Defaults to (5, 5).
-        kwargs (Any): Keyword arguments for the method. Modify behaviour of respecitve method.
-            For kneepoint: [S online, curve, direction, interp_method,polynomial_degree; For mean: [mean_multiplier]
-            For median [median_multiplier]
+    Args:
+        data (Optional[pd.DataFrame]): DataFrame containing coordinates and frame info.
+                                       Required if 'image' is None.
+        image (Optional[np.ndarray]): Image array (2D) or time series (3D).
+                                    Required if 'data' is None.
+        method (str): Method for choosing eps from k-distances: 'kneepoint', 'mean', 'median'.
+        position_columns (Optional[list[str]]): Column names for spatial coordinates in 'data'.
+                                                Defaults to ['y', 'x'] for 2D images or ['y', 'x', 'z'] for 3D.
+                                                Required if 'data' is provided.
+        frame_column (str): Column name for frame/time in 'data'. Defaults to 't'.
+        n_neighbors (int): The 'k' for k-distance calculation (distance to k-th neighbor).
+                           Typically set to MinPts-1 for DBSCAN. Defaults to 5.
+        plot (bool): If True, plots the sorted k-distance graph with the estimated eps.
+        plt_size (tuple[int, int]): Figure size for the plot.
+        max_samples (int): Max number of k-distances to use for estimation (subsampling).
+        binarize_threshold (float): Threshold for converting 'image' pixels to points.
+        **kwargs (Any): Additional keyword arguments passed to the estimation method.
+                         For 'kneepoint': S, online, curve, interp_method, direction, polynomial_degree.
+                         For 'mean'/'median': mean_multiplier, median_multiplier (defaults to 1.5).
 
     Returns:
-        Eps (float): eps parameter for DBSCAN.
+        float: Estimated eps value.
+
+    Raises:
+        ValueError: If input requirements are not met (e.g., both/neither data/image given,
+                    missing columns, no valid distances found).
     """
-    method_option = ['kneepoint', 'mean', 'median']
+    method_options = ["kneepoint", "mean", "median"]
+    if method not in method_options:
+        raise ValueError(f"Method must be one of {method_options}")
 
-    if method not in method_option:
-        raise ValueError(f"Method must be one of {method_option}")
+    if (data is None and image is None) or (data is not None and image is not None):
+        raise ValueError("Provide either a DataFrame ('data') or an image ('image'), not both.")
 
-    allowedtypes: dict[str, str] = {
-        'kneepoint': 'kneepoint_values',
-        'mean': 'mean_values',
-        'median': 'median_values',
-    }
+    data_processed: Optional[pd.DataFrame] = None
 
-    kwdefaults: dict[str, Any] = {
-        'S': 1,
-        'online': True,
-        'curve': 'convex',
-        'direction': 'increasing',
-        'interp_method': 'polynomial',
-        'mean_multiplier': 1.5,
-        'median_multiplier': 1.5,
-        'polynomial_degree': 7,
-    }
+    # --- Process Image Input ---
+    if image is not None:
+        ndim = image.ndim
+        coords_list = []
 
-    kwtypes: dict[str, Any] = {
-        'S': int,
-        'online': bool,
-        'curve': str,
-        'direction': str,
-        'interp_method': str,
-        'polynomial_degree': int,
-        'mean_multiplier': (float, int),
-        'median_multiplier': (float, int),
-        'pos_cols': list,
-        'frame_col': str,
-    }
+        if ndim == 3:  # Time series (T, Y, X) or (T, Z, Y, X)? Assuming (T, Y, X) or (T, Z, Y, X)
+            n_frames = image.shape[0]
+            img_dims = image.shape[1:]  # Spatial dimensions
+            if position_columns is None:
+                # Default names based on spatial dimensions
+                if len(img_dims) == 2:  # (Y, X)
+                    position_columns = ['y', 'x']
+                elif len(img_dims) == 3:  # (Z, Y, X)
+                    position_columns = ['z', 'y', 'x']
+                else:
+                    raise ValueError(f"Unsupported image spatial dimensions: {len(img_dims)}")
 
-    allowedkwargs: dict[str, list[str]] = {
-        'kneepoint_values': ['S', 'online', 'curve', 'interp_method', 'direction', 'polynomial_degree'],
-        'mean_values': ['mean_multiplier'],
-        'median_values': ['median_multiplier'],
-    }
+            elif len(position_columns) != len(img_dims):
+                raise ValueError(
+                    f"Length of position_columns ({len(position_columns)}) must match image spatial dimensions ({len(img_dims)})."
+                )
 
-    map_deprecated_parameters = {
-        'pos_cols': 'position_columns',
-        'frame_col': 'frame_column',
-    }
+            print(f"Processing {n_frames} image frames with threshold {binarize_threshold}...")
+            for t, img_frame in enumerate(image):
+                frame_coords = _binarize_image_to_coords(img_frame, threshold=binarize_threshold)
+                if frame_coords.size > 0:
+                    # Add frame number as the first column
+                    coords_with_frame = np.column_stack((np.full(frame_coords.shape[0], t), frame_coords))
+                    coords_list.append(coords_with_frame)
 
-    for key in kwargs:
-        if key not in allowedkwargs[allowedtypes[method]] and key not in map_deprecated_parameters:
-            raise ValueError(f'{key} keyword not in allowed keywords {allowedkwargs[allowedtypes[method]]}')
-        if not isinstance(kwargs[key], kwtypes[key]):
-            raise ValueError(f'{key} must be of type {kwtypes[key]}')
+        elif ndim == 2:  # Single image (Y, X) or (Z, Y, X)? Assuming (Y, X)
+            img_dims = image.shape
+            if position_columns is None:
+                # Default names based on spatial dimensions
+                if len(img_dims) == 2:  # (Y, X)
+                    position_columns = ['y', 'x']
+                # Add handling for single 3D image if needed
+                # elif len(img_dims) == 3: # (Z, Y, X)
+                #    position_columns = ['z', 'y', 'x']
+                else:
+                    raise ValueError(f"Unsupported image spatial dimensions: {len(img_dims)}")
+            elif len(position_columns) != len(img_dims):
+                raise ValueError(
+                    f"Length of position_columns ({len(position_columns)}) must match image spatial dimensions ({len(img_dims)})."
+                )
 
-    # Set kwarg defaults
-    for kw in allowedkwargs[allowedtypes[method]]:
-        kwargs.setdefault(kw, kwdefaults[kw])
+            print(f"Processing single image frame with threshold {binarize_threshold}...")
+            frame_coords = _binarize_image_to_coords(image, threshold=binarize_threshold)
+            if frame_coords.size > 0:
+                # Add a dummy frame number (0) as the first column
+                coords_with_frame = np.column_stack((np.zeros(frame_coords.shape[0]), frame_coords))
+                coords_list.append(coords_with_frame)
+        else:
+            raise ValueError(f"Unsupported image dimension: {ndim}. Expecting 2 or 3.")
 
-    kwargs = handle_deprecated_params(map_deprecated_parameters, **kwargs)
+        if not coords_list:
+            raise ValueError(f"No coordinates found in image data after applying threshold {binarize_threshold}.")
 
-    # assign parameters
-    position_columns = kwargs.get('position_columns', position_columns)  # type: ignore
-    frame_column = kwargs.get('frame_column', frame_column)  # type: ignore
+        # Combine coordinates from all frames
+        all_coords_np = np.vstack(coords_list)
+        data_processed = pd.DataFrame(all_coords_np, columns=[frame_column] + position_columns)
 
-    # remove deprecated parameters
-    for key in map_deprecated_parameters:
-        if key in kwargs:
-            del kwargs[key]
+    # --- Process DataFrame Input ---
+    elif data is not None:
+        if position_columns is None:
+            raise ValueError("`position_columns` must be provided when input is a DataFrame.")
+        # Validate DataFrame structure
+        required_cols = [frame_column] + position_columns
+        missing_cols = [col for col in required_cols if col not in data.columns]
+        if missing_cols:
+            raise ValueError(f"Missing required columns in DataFrame: {missing_cols}")
+        data_processed = data[required_cols].copy()  # Work on a copy
 
-    subset = [frame_column] + position_columns
-    for i in subset:
-        if i not in data.columns:
-            raise ValueError(f"Column {i} not in data")
+    # Should have data_processed DataFrame by now
+    if data_processed is None or data_processed.empty:
+        raise ValueError("Could not process input data into a valid format.")
 
-    subset = [frame_column] + position_columns
-    data_np = data[subset].to_numpy(dtype=np.float64)
-    # sort by frame
+    # --- Calculate k-Distances ---
+    # Convert relevant columns to numpy for efficiency
+    if position_columns is None:
+        raise ValueError("position_columns must be provided.")
+    data_np = data_processed[[frame_column] + position_columns].to_numpy(dtype=np.float64)
+
+    # Sort by frame first, essential for correct splitting
     data_np = data_np[data_np[:, 0].argsort()]
-    grouped_array = np.split(data_np[:, 1:], np.unique(data_np[:, 0], axis=0, return_index=True)[1][1:])
-    # map nearest_neighbours to grouped_array
-    distances = [_nearest_neighbour_eps(i, n_neighbors) for i in grouped_array if i.shape[0] >= n_neighbors]
-    if not distances:
-        distances_array = np.array([])
+
+    # Get unique frame numbers and the indices where each new frame starts
+    unique_frames, frame_start_indices = np.unique(data_np[:, 0], return_index=True)
+
+    grouped_coords = np.split(data_np[:, 1:], frame_start_indices[1:])
+
+    print(f"Calculating {n_neighbors}-th neighbor distances for {len(grouped_coords)} frames...")
+    all_k_distances = []
+    for i, frame_coords in enumerate(grouped_coords):
+        if frame_coords.shape[0] > n_neighbors:
+            k_distances = _get_kth_neighbor_distance(frame_coords, k=n_neighbors)
+            if k_distances.size > 0:
+                all_k_distances.append(k_distances)
+
+    if not all_k_distances:
+        raise ValueError(f"No frames found with enough points (> {n_neighbors}) to calculate k-th neighbor distances.")
+
+    # Combine distances from all valid frames
+    distances_array = np.concatenate(all_k_distances)
+
+    # Remove any non-finite values (though less likely with KDTree distances)
+    distances_finite = distances_array[np.isfinite(distances_array)]
+
+    if distances_finite.shape[0] == 0:
+        raise ValueError("No valid finite k-th neighbor distances found.")
+
+    # Subsample if necessary
+    n_total_distances = distances_finite.shape[0]
+    if n_total_distances > max_samples:
+        print(f"Subsampling {max_samples} distances from {n_total_distances} for estimation.")
+        distances_sampled = np.random.choice(distances_finite, max_samples, replace=False)
     else:
-        distances_array = np.concatenate(distances)
-    # flatten array
-    distances_flat = distances_array.flatten()
-    distances_flat = distances_flat[np.isfinite(distances_flat)]
-    distances_flat_selection = np.random.choice(
-        distances_flat, min(max_samples, distances_flat.shape[0]), replace=False
-    )
-    distances_sorted = np.sort(distances_flat_selection)
-    if distances_sorted.shape[0] == 0:
-        raise ValueError('No valid distances found, please check input data.')
-    if method == 'kneepoint':
-        k1 = KneeLocator(
-            np.arange(0, distances_sorted.shape[0]),
-            distances_sorted,
-            S=kwargs['S'],
-            online=kwargs['online'],
-            curve=kwargs['curve'],
-            interp_method=kwargs['interp_method'],
-            direction=kwargs['direction'],
-            polynomial_degree=kwargs['polynomial_degree'],
-        )
+        distances_sampled = distances_finite
 
-        eps = distances_sorted[k1.knee]
+    # Sort the distances for analysis and plotting
+    distances_sorted = np.sort(distances_sampled)
 
-    elif method == 'mean':
-        eps = np.mean(distances_sorted) * kwargs['mean_multiplier']
+    # --- Estimate eps ---
+    eps: float = 0.0  # Initialize eps
 
-    elif method == 'median':
-        eps = np.median(distances_sorted) * kwargs['median_multiplier']
+    print(f"Estimating eps using '{method}' method...")
+    if method == "kneepoint":
+        kneedle_kwargs = {
+            'S': kwargs.get("S", 1.0),
+            'online': kwargs.get("online", False),
+            'curve': kwargs.get("curve", "convex"),
+            'direction': kwargs.get("direction", "increasing"),
+            'interp_method': kwargs.get("interp_method", "interp1d"),
+            'polynomial_degree': kwargs.get("polynomial_degree", 7),
+        }
+        # Filter out None values potentially returned by kwargs.get if default was None
+        kneedle_kwargs = {k: v for k, v in kneedle_kwargs.items() if v is not None}
 
+        kneedle = KneeLocator(x=np.arange(distances_sorted.shape[0]), y=distances_sorted, **kneedle_kwargs)
+        if kneedle.knee is None:
+            warnings.warn("Kneepoint detection failed. Falling back to median distance as eps.")
+            # Fallback strategy: use median * 1.0 (no multiplier)
+            eps = np.median(distances_sorted)
+        else:
+            eps = float(distances_sorted[kneedle.knee])  # Ensure float type
+
+    elif method == "mean":
+        multiplier = kwargs.get("mean_multiplier", 1.5)
+        eps = np.mean(distances_sorted) * multiplier
+
+    elif method == "median":
+        multiplier = kwargs.get("median_multiplier", 1.5)
+        eps = np.median(distances_sorted) * multiplier
+
+    print(f"Estimated eps: {eps:.4f}")
+
+    # --- Plotting ---
     if plot:
         fig, ax = plt.subplots(figsize=plt_size)
-        ax.plot(distances_sorted)
-        ax.axhline(eps, color='r', linestyle='--')
-        ax.set_xlabel('Sorted Distance Index')
-        ax.set_ylabel('Nearest Neighbour Distance')
-        ax.set_title(f'Estimated eps: {eps:.4f}')
+        ax.plot(distances_sorted, marker='.', linestyle='-', markersize=2, label=f'{n_neighbors}-th Neighbor Distance')
+        ax.axhline(eps, color="r", linestyle="--", label=f'Estimated eps = {eps:.4f}')
+
+        # Annotate kneepoint if found
+        if method == "kneepoint" and 'kneedle' in locals() and kneedle.knee is not None:
+            ax.plot(kneedle.knee, distances_sorted[kneedle.knee], 'ro', markersize=6, label='Detected Knee')
+
+        ax.set_xlabel("Points Sorted by Distance")
+        ax.set_ylabel(f"Distance to {n_neighbors}-th Nearest Neighbor")
+        ax.set_title("k-Distance Graph for eps Estimation")
+        ax.legend()
+        ax.grid(True, linestyle=':', alpha=0.6)
+        plt.tight_layout()
         plt.show()
 
     return eps

@@ -17,7 +17,7 @@ def test_estimate_eps(test_data):
         method='kneepoint',
         position_columns=['x', 'y'],
         frame_column='t',
-        n_neighbors=2,
+        n_neighbors=1,
         S=1,
         online=True,
         curve='convex',
@@ -34,7 +34,7 @@ def test_estimate_eps(test_data):
         method='mean',
         position_columns=['x', 'y'],
         frame_column='t',
-        n_neighbors=2,
+        n_neighbors=1,
         mean_multiplier=1.5,
         plot=False,
     )
@@ -46,7 +46,7 @@ def test_estimate_eps(test_data):
         method='median',
         position_columns=['x', 'y'],
         frame_column='t',
-        n_neighbors=2,
+        n_neighbors=1,
         median_multiplier=1.5,
         plot=False,
     )
@@ -63,13 +63,13 @@ def test_estimate_eps(test_data):
         estimate_eps(test_data, position_columns=['x', 'y', 'z'], frame_column='t', n_neighbors=2, plot=False)
 
     # Test invalid kwarg type
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         estimate_eps(
             test_data,
             method='mean',
             position_columns=['x', 'y'],
             frame_column='t',
-            n_neighbors=2,
+            n_neighbors=1,
             mean_multiplier='string',
             plot=False,
         )
