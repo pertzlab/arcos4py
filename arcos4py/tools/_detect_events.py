@@ -736,7 +736,13 @@ class LineageTracker:
         new_tracker.max_parents_count = self.max_parents_count
         return new_tracker
 
-    def filter(self, criteria: str = None, min_value: int = None, max_value: int = None, ids: np.ndarray = None):
+    def filter(
+        self,
+        criteria: Optional[str] = None,
+        min_value: Optional[int] = None,
+        max_value: Optional[int] = None,
+        ids: Optional[np.ndarray] = None,
+    ):
         """Returns a new LineageTracker with nodes filtered by the given criteria.
 
         Args:
@@ -824,7 +830,7 @@ class LineageTracker:
                     if new_child not in node.children:
                         node.children.append(new_child)
 
-    def _check_bounds(self, value: int, min_value: int = None, max_value: int = None) -> bool:
+    def _check_bounds(self, value: int, min_value: Optional[int] = None, max_value: Optional[int] = None) -> bool:
         """Helper method to check if a value is within bounds."""
         if min_value is not None and value < min_value:
             return False
@@ -832,7 +838,7 @@ class LineageTracker:
             return False
         return True
 
-    def _get_size_filtered_ids(self, min_size: int = None, max_size: int = None):
+    def _get_size_filtered_ids(self, min_size: Optional[int] = None, max_size: Optional[int] = None):
         """Returns set of node IDs filtered by event size."""
         return {
             node.cluster_id
@@ -840,7 +846,7 @@ class LineageTracker:
             if self._check_bounds(node.maxframe - node.minframe + 1, min_size, max_size)
         }
 
-    def _get_duration_filtered_ids(self, min_duration: int = None, max_duration: int = None):
+    def _get_duration_filtered_ids(self, min_duration: Optional[int] = None, max_duration: Optional[int] = None):
         """Returns set of node IDs filtered by event duration."""
         return {
             node.cluster_id
@@ -893,7 +899,7 @@ class LineageTracker:
 
         return lineage_merges, lineage_splits
 
-    def _get_lineage_size_filtered_ids(self, min_size: int = None, max_size: int = None):
+    def _get_lineage_size_filtered_ids(self, min_size: Optional[int] = None, max_size: Optional[int] = None):
         """Returns set of node IDs filtered by lineage size.
 
         A lineage's size is the total count of events with that lineage ID.
@@ -906,7 +912,9 @@ class LineageTracker:
             if self._check_bounds(lineage_sizes[node.lineage_id], min_size, max_size)
         }
 
-    def _get_lineage_duration_filtered_ids(self, min_duration: int = None, max_duration: int = None):
+    def _get_lineage_duration_filtered_ids(
+        self, min_duration: Optional[int] = None, max_duration: Optional[int] = None
+    ):
         """Returns set of node IDs filtered by lineage duration.
 
         A lineage's duration is the span from the earliest to latest frame of any event
@@ -1082,7 +1090,8 @@ class Linker:
         self._n_jobs = n_jobs
         self._validate_input(eps, eps_prev, min_clustersize, min_samples, clustering_method, n_prev, n_jobs)
 
-        self.event_ids = np.empty((0, 0), dtype=np.int64)
+        # self.event_ids
+        self.event_ids: np.ndarray[tuple[int, ...], np.dtype[np.int64]] = np.empty((0, 0), dtype=np.int64)
 
         if hasattr(clustering_method, '__call__'):  # check if it's callable
             self.clustering_function = clustering_method

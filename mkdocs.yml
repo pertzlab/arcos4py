@@ -1,6 +1,6 @@
 site_name: arcos4py
-site_url: https://bgraedel.github.io/arcos4py
-repo_url: https://github.com/bgraedel/arcos4py
+site_url: https://pertzlab.github.io/arcos4py
+repo_url: https://github.com/pertzlab/arcos4py
 repo_name: bgraedel/arcos4py
 #strict: true
 nav:
@@ -72,7 +72,7 @@ extra:
       link: https://www.pertzlab.net/
       name: Lab Website
     - icon: fontawesome/brands/github
-      link: https://github.com/bgraedel/arcos4py
+      link: https://github.com/pertzlab/arcos4py
       name: Github
     - icon: material/email
       link: "mailto:benjamin.graedel@unibe.ch"
