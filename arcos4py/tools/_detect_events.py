@@ -197,6 +197,7 @@ def brute_force_linking(
     return cluster_labels, max_cluster_label
 
 
+
 @njit(parallel=True)
 def _compute_filtered_distances(current_coords, memory_coords):
     n, m = len(current_coords), len(memory_coords)
@@ -286,7 +287,6 @@ def transportation_linking(
         new_cluster_labels[new_cluster_labels == -1] = max_cluster_label
 
     return new_cluster_labels, max_cluster_label
-
 
 @dataclass
 class Memory:
