@@ -19,10 +19,8 @@ from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
-import ot
 import pandas as pd
 from kneed import KneeLocator
-from numba import njit, prange
 from skimage.transform import rescale
 from sklearn.cluster import DBSCAN, HDBSCAN
 from sklearn.neighbors import KDTree
@@ -30,6 +28,7 @@ from tqdm import tqdm
 
 from ..plotting._plotting import LineagePlot
 from ..tools._arcos4py_deprecation import handle_deprecated_params
+from ..tools._linking import brute_force_linking, transportation_linking
 
 AVAILABLE_CLUSTERING_METHODS = ['dbscan', 'hdbscan']
 AVAILABLE_LINKING_METHODS = ['nearest', 'transportation']
@@ -107,7 +106,7 @@ def _group_array(group_by, *args, return_group_by=True):
     return tuple(result)
 
 
-def _dbscan(x: np.ndarray, eps: float, minClSz: int, n_jobs: int = 1) -> np.ndarray:
+def _dbscan(x: np.ndarray, eps: float, minClSz: int, n_jobs: int = 1, **kwargs) -> np.ndarray:
     """Dbscan method to run and merge the cluster id labels to the original dataframe.
 
     Arguments:
@@ -126,7 +125,13 @@ def _dbscan(x: np.ndarray, eps: float, minClSz: int, n_jobs: int = 1) -> np.ndar
 
 
 def _hdbscan(
-    x: np.ndarray, eps: float, minClSz: int, min_samples: int | None, cluster_selection_method: str, n_jobs: int = 1
+    x: np.ndarray,
+    eps: float,
+    minClSz: int,
+    min_samples: int | None,
+    cluster_selection_method: str,
+    n_jobs: int = 1,
+    **kwargs,
 ) -> np.ndarray:
     """Hdbscan method to run and merge the cluster id labels to the original dataframe.
 
@@ -150,143 +155,6 @@ def _hdbscan(
 
     return np.empty((0, 0))
 
-
-def brute_force_linking(
-    cluster_labels: np.ndarray,
-    cluster_coordinates: np.ndarray,
-    memory_cluster_labels: np.ndarray,
-    memory_kdtree: KDTree,
-    epsPrev: float,
-    max_cluster_label: int,
-) -> Tuple[np.ndarray, int]:
-    """Brute force linking of clusters across frames.
-
-    Arguments:
-        cluster_labels (np.ndarray): The cluster labels for the current frame.
-        cluster_coordinates (np.ndarray): The cluster coordinates for the current frame.
-        memory_cluster_labels (np.ndarray): The cluster labels for previous frames.
-        memory_kdtree (KDTree): KDTree for the previous frame's clusters.
-        epsPrev (float): Frame-to-frame distance, used to connect clusters across frames.
-        max_cluster_label (int): The maximum label for clusters.
-        n_jobs (int): The number of parallel jobs.
-
-    Returns:
-        Tuple containing the updated cluster labels and the maximum cluster label.
-    """
-    # calculate nearest neighbour between previoius and current frame
-    nn_dist, nn_indices = memory_kdtree.query(cluster_coordinates, k=1)
-    nn_dist = nn_dist.flatten()
-    nn_indices = nn_indices.flatten()
-
-    prev_cluster_labels = memory_cluster_labels[nn_indices]
-    prev_cluster_labels_eps = prev_cluster_labels[(nn_dist <= epsPrev)]
-    # only continue if neighbours
-    # were detected within eps distance
-    if prev_cluster_labels_eps.size < 1:
-        max_cluster_label += 1
-        return np.repeat(max_cluster_label, cluster_labels.size), max_cluster_label
-
-    prev_clusternbr_eps_unique = np.unique(prev_cluster_labels_eps, return_index=False)
-
-    if prev_clusternbr_eps_unique.size == 0:
-        max_cluster_label += 1
-        return np.repeat(max_cluster_label, cluster_labels.size), max_cluster_label
-
-    # propagate cluster id from previous frame
-    cluster_labels = prev_cluster_labels
-    return cluster_labels, max_cluster_label
-
-
-
-@njit(parallel=True)
-def _compute_filtered_distances(current_coords, memory_coords):
-    n, m = len(current_coords), len(memory_coords)
-    distances = np.empty((n, m))
-    for i in prange(n):
-        for j in range(m):
-            distances[i, j] = np.sum((current_coords[i] - memory_coords[j]) ** 2)
-    return np.sqrt(distances)
-
-
-@njit
-def _assign_labels(matches, current_indices, memory_indices, memory_cluster_labels, cluster_labels_size):
-    new_cluster_labels = np.full(cluster_labels_size, -1)
-    for i, m in enumerate(matches):
-        if m != -1:
-            new_cluster_labels[current_indices[i]] = memory_cluster_labels[memory_indices[m]]
-    return new_cluster_labels
-
-
-def transportation_linking(
-    cluster_labels: np.ndarray,
-    cluster_coordinates: np.ndarray,
-    memory_cluster_labels: np.ndarray,
-    memory_coordinates: np.ndarray,
-    memory_kdtree: KDTree,
-    epsPrev: float,
-    max_cluster_label: int,
-    reg: float = 1,
-    reg_m: float = 10,
-    cost_threshold: float = 0,
-    **kwargs: Dict[str, Any],
-) -> Tuple[np.ndarray, int]:
-    """Optimized pixel-wise transportation linking of clusters across frames.
-
-    Arguments:
-        cluster_labels (np.ndarray): The cluster labels for the current frame.
-        cluster_coordinates (np.ndarray): The cluster coordinates for the current frame.
-        memory_cluster_labels (np.ndarray): The cluster labels for previous frames.
-        memory_coordinates (np.ndarray): The cluster coordinates for previous frames.
-        memory_kdtree (KDTree): KDTree for the previous frame's clusters.
-        epsPrev (float): Frame-to-frame distance, used to connect clusters across frames.
-        max_cluster_label (int): The maximum label for clusters.
-        reg (float): Entropy regularization parameter for unbalanced OT algorithm.
-        reg_m (float): Marginal relaxation parameter for unbalanced OT.
-        cost_threshold (float): Cost threshold for assigning clusters.
-
-    Uses unbalanced OT to assign each current pixel to a previous pixel within epsPrev.
-    """
-    # Find all memory indices within epsPrev of any current pixel
-    neighbors = memory_kdtree.query_radius(cluster_coordinates, r=epsPrev)
-
-    if all(len(ind) == 0 for ind in neighbors):
-        max_cluster_label += 1
-        return np.full(cluster_labels.shape, max_cluster_label, dtype=int), max_cluster_label
-
-    valid_mem_idx = np.unique(np.concatenate([ind for ind in neighbors if len(ind) > 0]))
-    if valid_mem_idx.size == 0:
-        max_cluster_label += 1
-        return np.full(cluster_labels.shape, max_cluster_label, dtype=int), max_cluster_label
-
-    # Build cost matrix between each current pixel and each candidate memory pixel
-    curr_coords = cluster_coordinates
-    mem_coords = memory_coordinates[valid_mem_idx]
-    cost_matrix = _compute_filtered_distances(curr_coords, mem_coords)
-
-    # Uniform distributions
-    n_curr = curr_coords.shape[0]
-    n_mem = mem_coords.shape[0]
-    a = np.ones(n_curr) / n_curr
-    b = np.ones(n_mem) / n_mem
-
-    # Solve unbalanced OT
-    ot_plan = ot.unbalanced.sinkhorn_unbalanced(a, b, cost_matrix, reg, reg_m)
-
-    # Determine best assignment for each current pixel
-    best_mem = np.argmax(ot_plan, axis=1)
-    probs = ot_plan[np.arange(n_curr), best_mem]
-    best_mem[probs < cost_threshold] = -1
-
-    new_cluster_labels = np.full(n_curr, -1, dtype=int)
-    for i, m in enumerate(best_mem):
-        if m != -1:
-            new_cluster_labels[i] = int(memory_cluster_labels[valid_mem_idx[m]])
-
-    if np.any(new_cluster_labels == -1):
-        max_cluster_label += 1
-        new_cluster_labels[new_cluster_labels == -1] = max_cluster_label
-
-    return new_cluster_labels, max_cluster_label
 
 @dataclass
 class Memory:
@@ -1177,39 +1045,42 @@ class Linker:
     def _clustering(self, x):
         if x.size == 0:
             return np.empty((0,), dtype=np.int64), x, np.empty((0, 1), dtype=bool)
-        clusters = self.clustering_function(x)
+        clusters = self.clustering_function(x, frame_counter=self.frame_counter)
         nanrows = np.isnan(clusters)
         return clusters[~nanrows], x[~nanrows], nanrows
 
     # @profile
     def _link_next_cluster(self, cluster: np.ndarray, cluster_coordinates: np.ndarray):
-        if self.linking_function == 'brute_force_linking':
-            linked_clusters, max_cluster_label = brute_force_linking(
-                cluster_labels=cluster,
-                cluster_coordinates=cluster_coordinates,
-                memory_cluster_labels=self._memory.all_cluster_ids,
-                memory_kdtree=self._nn_tree,
-                epsPrev=self._eps_prev,
-                max_cluster_label=self._memory.max_prev_cluster_id,
-            )
-        elif self.linking_function == 'transportation_linking':
-            linked_clusters, max_cluster_label = transportation_linking(
-                cluster_labels=cluster,
-                cluster_coordinates=cluster_coordinates,
-                memory_cluster_labels=self._memory.all_cluster_ids,
-                memory_coordinates=self._memory.all_coordinates,
-                memory_kdtree=self._nn_tree,
-                epsPrev=self._eps_prev,
-                max_cluster_label=self._memory.max_prev_cluster_id,
-                reg=self._reg,
-                reg_m=self._reg_m,
-                cost_threshold=self._cost_threshold,
-            )
+        cluster = np.asarray(cluster, dtype=np.int64).reshape(-1)
+        cluster_coordinates = np.asarray(cluster_coordinates).reshape(-1, self._memory.all_coordinates.shape[1])
+        # resolve function from string or use callable directly
+        if isinstance(self.linking_function, str):
+            mapping = {
+                'brute_force_linking': brute_force_linking,
+                'transportation_linking': transportation_linking,
+            }
+            fn = mapping.get(self.linking_function)
+            if fn is None:
+                raise ValueError(f'Linking method must be (for now) in {AVAILABLE_LINKING_METHODS}')
         else:
-            raise ValueError(f'Linking method must be (for now) in {AVAILABLE_LINKING_METHODS}')
+            fn = self.linking_function  # user-provided callable
 
+        # one superset of kwargs; unused keys are ignored by `**kwargs` in the function
+        kwargs = dict(
+            cluster_labels=cluster,
+            cluster_coordinates=cluster_coordinates,
+            memory_cluster_labels=self._memory.all_cluster_ids,
+            memory_coordinates=getattr(self._memory, "all_coordinates", None),
+            memory_kdtree=self._nn_tree,
+            epsPrev=self._eps_prev,
+            max_cluster_label=self._memory.max_prev_cluster_id,
+            reg=getattr(self, "_reg", None),
+            reg_m=getattr(self, "_reg_m", None),
+            cost_threshold=getattr(self, "_cost_threshold", 0),
+        )
+
+        linked_clusters, max_cluster_label = fn(**kwargs)  # unused kwargs are ignored
         self._memory.max_prev_cluster_id = max_cluster_label
-
         return linked_clusters
 
     def _update_tree(self, coords):
@@ -1290,18 +1161,32 @@ class Linker:
             raise ValueError("Memory coordinates are empty")
 
         self._update_tree(memory_coordinates)
-        # group by cluster id
-        cluster_ids_sort_key, grouped_clusters, grouped_coordinates = _group_array(cluster_ids, coordinates)
 
-        # # do linking
-        linked_cluster_ids = [
-            self._link_next_cluster(cluster, cluster_coordinates)
-            for cluster, cluster_coordinates in zip(grouped_clusters, grouped_coordinates)
-        ]
-        # restore original data order
+        if (
+            callable(self.linking_function)
+            and getattr(self.linking_function, "__linking_scope__", "per_cluster") == "global"
+        ):
+            kwargs = dict(
+                frame_cluster_labels=cluster_ids,
+                frame_coordinates=coordinates,
+                memory_cluster_labels=self._memory.all_cluster_ids,
+                memory_coordinates=self._memory.all_coordinates,
+                memory_kdtree=self._nn_tree,
+                epsPrev=self._eps_prev,
+                max_cluster_label=self._memory.max_prev_cluster_id,
+                reg=getattr(self, "_reg", None),
+                reg_m=getattr(self, "_reg_m", None),
+                cost_threshold=getattr(self, "_cost_threshold", 0),
+            )
+            linked_cluster_ids, new_max = self.linking_function(**kwargs)
+            self._memory.max_prev_cluster_id = new_max
+            return linked_cluster_ids
+
+        # else: your existing per-cluster grouping path (calls _link_next_cluster)
+        cluster_ids_sort_key, grouped_clusters, grouped_coordinates = _group_array(cluster_ids, coordinates)
+        linked_cluster_ids = [self._link_next_cluster(c, cc) for c, cc in zip(grouped_clusters, grouped_coordinates)]
         revers_sort_key = np.argsort(cluster_ids_sort_key)
-        linked_cluster_ids = np.concatenate(linked_cluster_ids)[revers_sort_key]
-        return linked_cluster_ids
+        return np.concatenate(linked_cluster_ids)[revers_sort_key]
 
     def _update_id_empty(self, cluster_ids):
         linked_cluster_ids = cluster_ids + self._memory.max_prev_cluster_id
@@ -1790,9 +1675,7 @@ class ImageTracker(BaseTracker):
         # check input
         for i in dims_list:
             if i not in available_dims:
-                raise ValueError(
-                    f"Invalid dimension {i}. Must be 'T', 'X', 'Y', or 'Z'."
-                )
+                raise ValueError(f"Invalid dimension {i}. Must be 'T', 'X', 'Y', or 'Z'.")
 
         if len(dims_list) > len(set(dims_list)):
             raise ValueError("Duplicate dimensions in dims.")
