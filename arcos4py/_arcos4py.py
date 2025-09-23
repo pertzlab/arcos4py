@@ -130,9 +130,7 @@ class ARCOS:
         ]
         input_columns = [col for col in input_columns if col is not None]
         if not all(item in columns for item in input_columns):
-            raise ValueError(
-                f"Columns {input_columns} do not match with column in dataframe."
-            )
+            raise ValueError(f"Columns {input_columns} do not match with column in dataframe.")
 
     def interpolate_measurements(self) -> pd.DataFrame:
         """Interpolates NaN's in place in measurement column.
