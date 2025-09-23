@@ -1,6 +1,6 @@
 [project]
 name = "arcos4py"
-version = "0.3.3"
+version = "0.3.2"
 description = "A python package to detect collective spatio-temporal phenomena."
 readme = "README.md"
 license = { text = "MIT" }
