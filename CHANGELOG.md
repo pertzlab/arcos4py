@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.3.3] - 2025-09-23
+### Added
+- Added ability to use a global linker
+
 ## [0.3.2] - 2025-05-05
 ### Fixed
 - Fixed issue with 3d movie plotting
