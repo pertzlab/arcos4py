@@ -120,10 +120,11 @@ def detect_coactivation_events_image(
         prune_early=prune_early,
         calibration=calibration,
     )
-    best = None
+    best_lab, best_rep = None, None
     for tsz in sizes:
         lab, rep = _tiles_once(stack.astype(np.float32), tsz, mask, epsilon=epsilon / len(sizes), **kw)
-        if best is None or rep.n_events > best[1].n_events:
-            best = (lab, rep)
-    best[1].tiles_tried = sizes
-    return best if return_report else best[0]
+        if best_rep is None or rep.n_events > best_rep.n_events:
+            best_lab, best_rep = lab, rep
+    assert best_rep is not None  # at least one tile size is always tried
+    best_rep.tiles_tried = sizes
+    return (best_lab, best_rep) if return_report else best_lab

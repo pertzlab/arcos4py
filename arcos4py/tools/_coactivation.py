@@ -428,8 +428,8 @@ class CoactivationCalibration:
     null_cellframes: float
     epsilon: float = 1.0
     level_mode: str = "quantile"
-    _cache: list = field(default=None, repr=False)
-    _cache_key: int = field(default=None, repr=False)
+    _cache: list | None = field(default=None, repr=False)
+    _cache_key: int | None = field(default=None, repr=False)
 
     def threshold(self, q, m, n_cellframes, n_tests=1):
         """Smallest group size with fewer than epsilon chance groups expected in a movie of this size."""
