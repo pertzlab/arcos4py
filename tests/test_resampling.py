@@ -138,6 +138,15 @@ def test_shuffle_coordinates_per_timepoint():
         np.testing.assert_array_equal(df_new['y'].values, [7, 8, 9, 10, 11, 12])
 
 
+def test_shuffle_tracks_does_not_modify_input():
+    test_df = pd.DataFrame(
+        {'t': [3, 2, 1, 1, 2, 3], 'track_id': [1, 1, 1, 2, 2, 2], 'x': [3, 2, 1, 4, 6, 8], 'y': [4, 3, 2, 5, 7, 9]}
+    )
+    before = test_df.copy()
+    shuffle_tracks(test_df, object_id_column='track_id', frame_column='t', seed=42)
+    pd.testing.assert_frame_equal(test_df, before)
+
+
 def test_shift_timepoints_per_trajectory():
     # Create test dataframe
     test_df = pd.DataFrame(

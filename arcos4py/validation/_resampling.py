@@ -46,8 +46,8 @@ def shuffle_tracks(
 ) -> pd.DataFrame:
     """Resample tracks by switching the first timepoint\
         positions of two tracks and then propagating the cummulative difference."""
-    df.sort_values([object_id_column, frame_column], inplace=True)  # needs to be sorted for _get_xy_change to work
-    df_pos_cols_np = df[positoin_column].to_numpy()
+    df = df.sort_values([object_id_column, frame_column])  # sorted for _get_xy_change; the input is not modified
+    df_pos_cols_np = df[positoin_column].to_numpy(copy=True)
     factorized_oid, _ = pd.factorize(df[object_id_column])
 
     # Set the random seed
@@ -113,7 +113,7 @@ def shuffle_timepoints(
     unique_track_ids = np.unique(track_ids)
 
     # get timepoints
-    df_t_np = df_new[frame_column].to_numpy()
+    df_t_np = df_new[frame_column].to_numpy(copy=True)
     # Iterate over the unique track IDs
     for track_id in unique_track_ids:
         # Get the rows with the current track ID
@@ -218,7 +218,7 @@ def shuffle_coordinates_per_timepoint(
     unique_timepoints = np.unique(timepoints)
 
     # get coordinates
-    df_tp_col_np = df_new[position_columns].to_numpy()
+    df_tp_col_np = df_new[position_columns].to_numpy(copy=True)
     # Iterate over the unique track IDs
     for tp in unique_timepoints:
         # Get the rows with the current track ID
@@ -245,7 +245,7 @@ def shift_timepoints_per_trajectory(
     unique_track_ids = np.unique(track_ids)
 
     # get timepoints
-    df_t_np = df_new[frame_column].to_numpy()
+    df_t_np = df_new[frame_column].to_numpy(copy=True)
     # Iterate over the unique track IDs
     for track_id in unique_track_ids:
         # Get the rows with the current track ID
@@ -258,6 +258,7 @@ def shift_timepoints_per_trajectory(
         timepoints = np.roll(timepoints, shift)
         df_t_np[track_rows] = timepoints
 
+    df_new[frame_column] = df_t_np  # write the shifted timepoints back (was relying on a writable view)
     df_new.sort_values(by=[object_id_column, frame_column], inplace=True)
     return df_new
 
