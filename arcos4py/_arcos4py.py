@@ -28,6 +28,7 @@ import pandas as pd
 from .tools._arcos4py_deprecation import handle_deprecated_params
 from .tools._binarize_detrend import binData
 from .tools._cleandata import clipMeas, interpolation
+from .tools._coactivation import detect_coactivation_events
 from .tools._detect_events import track_events_dataframe
 
 
@@ -404,6 +405,36 @@ class ARCOS:
         )
 
         return data_events
+
+    def track_coactive_events(self, epsilon: float = 1.0, **kwargs) -> pd.DataFrame:
+        """Detects collective events directly from the continuous measurement, without binarisation.
+
+        Neighbours come from a Delaunay graph per frame and every threshold is calibrated against copies of
+        the data in which each object's trace is shifted in time, so the only parameter is epsilon, the number
+        of false events one is willing to expect per movie. bin_measurements is not needed.
+        See arcos4py.tools.detect_coactivation_events for the method and the optional arguments.
+
+        Arguments:
+            epsilon (float): Number of false events one is willing to expect per movie. Default 1.
+            **kwargs (Any): Passed to arcos4py.tools.detect_coactivation_events (e.g. allow_merges,
+                remove_population_trend, calibration, return_report).
+
+        Returns:
+            DataFrame with the rows that belong to a collective event and their event id in clid_column
+            (and a CoactivationReport if return_report=True).
+        """
+        if self.obj_id_column is None:
+            raise ValueError("track_coactive_events needs tracked objects (obj_id_column)")
+        return detect_coactivation_events(
+            X=self.data,
+            position_columns=self.position_columns,
+            frame_column=self.frame_column,
+            obj_id_column=self.obj_id_column,
+            measurement_column=self.measurement_column,
+            clid_column=self.clid_column,
+            epsilon=epsilon,
+            **kwargs,
+        )
 
     @property
     def bin_col(self) -> str | None:

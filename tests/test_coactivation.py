@@ -1,0 +1,283 @@
+"""Tests for co-activation event detection (detect_coactivation_events and friends)."""
+
+import numpy as np
+import pandas as pd
+import pytest
+from scipy import sparse
+from scipy.sparse import csgraph
+
+from arcos4py import ARCOS
+from arcos4py.tools import CoactivationReport
+from arcos4py.tools import _coactivation_kernels as K
+from arcos4py.tools import (
+    calculate_statistics,
+    calibrate_coactivation,
+    detect_coactivation_events,
+    detect_coactivation_events_image,
+    filterCollev,
+)
+from arcos4py.tools._coactivation import null_threshold
+from arcos4py.tools._coactivation_baseline import interp_columns, masked_baseline_activity
+from arcos4py.tools._coactivation_graph import CellGraph
+
+POS = ["x", "y"]
+
+
+def _pulse(length, rise=2, plateau=3, decay=3.0):
+    k = np.arange(length)
+    g = np.where(k < rise, (k + 1) / rise, 1.0)
+    return np.where(k >= rise + plateau, np.exp(-(k - rise - plateau + 1) / decay), g)
+
+
+def simulate_sheet(
+    seed=0, side=20, T=120, waves=((60.0, 60.0, 20), (140.0, 140.0, 70)), noise=0.1, spont=0.002, bleach=0.0
+):
+    """Cells on a jittered square lattice (spacing 10); circular waves (centre x, centre y, start frame) that
+    spread one cell per frame; spontaneous pulses; Gaussian noise; optional exponential bleaching.
+    Returns the long table and the ground-truth wave id per row (0 = background)."""
+    rng = np.random.default_rng(seed)
+    yy, xx = np.mgrid[0:side, 0:side]
+    pos = np.c_[xx.ravel(), yy.ravel()] * 10.0 + rng.normal(0, 1.0, (side * side, 2))
+    n = pos.shape[0]
+    g = _pulse(25)
+    act = np.zeros((T, n))
+    gt = np.zeros((T, n), int)
+    for w, (cx, cy, t0) in enumerate(waves, start=1):
+        d = np.hypot(pos[:, 0] - cx, pos[:, 1] - cy) / 10.0
+        for c in np.flatnonzero(d < 6):
+            on = int(t0 + d[c])
+            seg = g[: max(0, min(T - on, g.size))]
+            act[on : on + seg.size, c] += seg
+            gt[on : on + seg.size, c] = np.where(seg >= 0.5, w, gt[on : on + seg.size, c])
+    for c, on in zip(rng.integers(0, n, rng.poisson(spont * n * T)), rng.integers(0, T, rng.poisson(spont * n * T))):
+        seg = g[: max(0, min(T - on, g.size))]
+        act[on : on + seg.size, c] += seg
+    t = np.arange(T)[:, None]
+    sig = (1.0 + act) * np.exp(-bleach * t / T) + noise * rng.normal(size=(T, n))
+    tt, cc = np.meshgrid(np.arange(T), np.arange(n), indexing="ij")
+    df = pd.DataFrame(
+        {"t": tt.ravel(), "id": cc.ravel(), "x": pos[cc.ravel(), 0], "y": pos[cc.ravel(), 1], "m": sig.ravel()}
+    )
+    return df, gt.ravel()
+
+
+@pytest.fixture(scope="module")
+def sheet():
+    return simulate_sheet()
+
+
+# ----------------------------------------------------------------------------- kernels
+def test_null_threshold():
+    sizes = np.array([1, 2, 2, 3, 5, 8])
+    # one null copy, one test, epsilon 1: larger than the largest chance group
+    assert null_threshold(sizes, 1, 1, 1.0) == 9
+    # four null copies: fewer than 4 chance groups >= s in total, i.e. s = 3 (the groups 8, 5 and 3)
+    assert null_threshold(sizes, 4, 1, 1.0) == 3
+
+
+def test_roll_within_lifetime_matches_numpy():
+    rng = np.random.default_rng(1)
+    D = rng.normal(size=(30, 6))
+    obs = rng.random((30, 6)) > 0.3
+    offs = rng.integers(0, 30, 6)
+    out = K.roll_within_lifetime(D, obs, offs, np.nan)
+    for j in range(6):
+        idx = np.flatnonzero(obs[:, j])
+        exp = np.full(30, np.nan)
+        if idx.size:
+            exp[idx] = np.roll(D[idx, j], offs[j] % idx.size)
+        np.testing.assert_array_equal(out[:, j], exp)
+
+
+def test_pulse_pairs_match_brute_force():
+    rng = np.random.default_rng(2)
+    n, T = 12, 40
+    A = sparse.random(n, n, density=0.3, random_state=3, format="csr").astype(bool)
+    A = ((A + A.T) > 0).astype(bool)
+    A.setdiag(False)
+    A.eliminate_zeros()
+    A = A.tocsr()
+    A.sort_indices()
+    indptr = A.indptr.astype(np.int64)[None, :]
+    indices = A.indices.astype(np.int64)
+    cells = rng.integers(0, n, 60)
+    times = rng.integers(0, T, 60)
+    r, c = K.pulse_pairs(cells, times, n, indptr, indices, 3)
+    got = set(zip(r.tolist(), c.tolist()))
+    exp = {(p, q) for p in range(60) for q in range(60) if A[cells[p], cells[q]] and 0 <= times[q] - times[p] <= 3}
+    assert got == exp
+    hist = K.lag_histogram(cells, times, n, indptr, indices, 3)
+    assert hist.sum() == len(exp)
+
+
+def test_rolling_median_matches_pandas():
+    rng = np.random.default_rng(4)
+    for W in (5, 8, 51):
+        X = np.round(rng.normal(size=(60, 4)), 1)
+        X[rng.random(X.shape) < 0.3] = np.nan
+        exp = pd.DataFrame(X).rolling(W, center=True, min_periods=1).median().to_numpy()
+        np.testing.assert_array_equal(K.rolling_median_centered(X, W), exp)
+
+
+def test_interpolation_matches_pandas():
+    rng = np.random.default_rng(14)
+    X = rng.normal(size=(40, 8))
+    X[rng.random(X.shape) < 0.4] = np.nan
+    X[:, 0] = np.nan
+    np.testing.assert_array_equal(interp_columns(X, True), pd.DataFrame(X).interpolate(limit_area="inside").to_numpy())
+    np.testing.assert_array_equal(
+        interp_columns(X, False), pd.DataFrame(X).interpolate(limit_direction="both").to_numpy()
+    )
+
+
+def test_frame_cluster_sizes_match_scipy():
+    rng = np.random.default_rng(5)
+    n, T = 30, 5
+    A = sparse.random(n, n, density=0.08, random_state=6, format="csr").astype(bool)
+    A = ((A + A.T) > 0).tocsr()
+    A.setdiag(False)
+    A.eliminate_zeros()
+    A.sort_indices()
+    active = rng.random((T, n)) > 0.5
+    got = np.sort(K.frame_cluster_sizes(active, A.indptr.astype(np.int64)[None, :], A.indices.astype(np.int64)))
+    exp = []
+    for t in range(T):
+        act = np.flatnonzero(active[t])
+        _, cl = csgraph.connected_components(A[act][:, act], directed=False)
+        exp.append(np.bincount(cl))
+    np.testing.assert_array_equal(got, np.sort(np.concatenate(exp)))
+
+
+# ----------------------------------------------------------------------------- baseline
+def test_baseline_removes_bleaching_and_keeps_pulses():
+    df, gt = simulate_sheet(seed=7, bleach=1.0)
+    T, n = df.t.max() + 1, df.id.max() + 1
+    S = df.m.to_numpy().reshape(T, n)
+    D, info = masked_baseline_activity(S, np.ones((T, n), bool))
+    rest = gt.reshape(T, n) == 0
+    assert abs(np.nanmedian(D[rest])) < 0.03  # flat resting level despite ~60 % bleaching
+    assert np.nanmedian(D[gt.reshape(T, n) > 0]) > 0.3  # pulses stay in the data
+    assert 51 <= info["window"] <= T
+
+
+# ----------------------------------------------------------------------------- detection
+def test_detects_waves(sheet):
+    df, gt = sheet
+    out, report = detect_coactivation_events(df, POS, "t", "id", "m", return_report=True)
+    assert isinstance(report, CoactivationReport)
+    assert report.n_events == out.collid.nunique() >= 2
+    in_wave = gt > 0
+    rows = df.assign(truth=gt).merge(out[["t", "id", "collid"]], on=["t", "id"], how="left")
+    called = rows.collid.notna().to_numpy()
+    assert called[in_wave].mean() > 0.6  # most wave cell-frames are found
+    assert in_wave[called].mean() > 0.8  # and most calls are in waves
+    # one event per wave: the two waves get different ids
+    ids = [rows.collid[(rows.truth == w).to_numpy() & called].mode().iloc[0] for w in (1, 2)]
+    assert ids[0] != ids[1]
+
+
+def test_output_format_and_downstream(sheet):
+    df, _ = sheet
+    out = detect_coactivation_events(df, POS, "t", "id", "m", clid_column="clTrackID")
+    assert list(out.columns) == list(df.columns) + ["clTrackID"]
+    assert out.clTrackID.dtype == np.int64 and out.clTrackID.min() >= 1
+    assert len(out.merge(df, on=list(df.columns))) == len(out)  # rows come from the input
+    stats = calculate_statistics(out, frame_column="t", clid_column="clTrackID", position_columns=POS)
+    assert len(stats) == out.clTrackID.nunique()
+    filtered = filterCollev(out, frame_column="t", clid_column="clTrackID", obj_id_column="id").filter(
+        min_duration=1, min_total_size=1
+    )
+    assert len(filtered) == len(out)
+
+
+def test_no_waves_gives_at_most_epsilon_events():
+    df, _ = simulate_sheet(seed=8, waves=())
+    out = detect_coactivation_events(df, POS, "t", "id", "m")
+    assert out.collid.nunique() <= 1
+
+
+def test_deterministic(sheet):
+    df, _ = sheet
+    a = detect_coactivation_events(df, POS, "t", "id", "m", seed=3)
+    b = detect_coactivation_events(df, POS, "t", "id", "m", seed=3)
+    pd.testing.assert_frame_equal(a, b)
+
+
+def test_options_run(sheet):
+    df, _ = sheet
+    base = detect_coactivation_events(df, POS, "t", "id", "m")
+    for kw in (
+        dict(prune_early=False),
+        dict(refine_start=False),
+        dict(allow_merges=True),
+        dict(remove_population_trend=False),
+        dict(baseline_window=61),
+    ):
+        out, rep = detect_coactivation_events(df, POS, "t", "id", "m", return_report=True, **kw)
+        assert out.collid.nunique() >= 1
+    full = detect_coactivation_events(df, POS, "t", "id", "m", prune_early=False)
+    assert len(full) >= len(base)  # pruning only removes members
+
+
+def test_missing_frames_and_track_breaks(sheet):
+    df, _ = sheet
+    rng = np.random.default_rng(9)
+    sub = df[rng.random(len(df)) > 0.05].copy()  # detections missing at random
+    sub["id"] = sub.id * 10 + (sub.t >= 60)  # every track broken in two
+    out = detect_coactivation_events(sub, POS, "t", "id", "m")
+    assert out.collid.nunique() >= 1
+
+
+def test_empty_input_raises(sheet):
+    df, _ = sheet
+    with pytest.raises(ValueError, match="Input is empty"):
+        detect_coactivation_events(df.iloc[:0], POS, "t", "id", "m")
+
+
+def test_arcos_class_method(sheet):
+    df, _ = sheet
+    ts = ARCOS(
+        df, position_columns=POS, frame_column="t", obj_id_column="id", measurement_column="m", clid_column="collid"
+    )
+    a = ts.track_coactive_events()
+    b = detect_coactivation_events(df, POS, "t", "id", "m")
+    pd.testing.assert_frame_equal(
+        a.sort_values(["t", "id"]).reset_index(drop=True), b.sort_values(["t", "id"]).reset_index(drop=True)
+    )
+
+
+def test_calibration_across_movies():
+    movies = [simulate_sheet(seed=s)[0] for s in (10, 11)]
+    calib = calibrate_coactivation(movies, POS, "t", "id", "m", n_null=4)
+    assert calib.q in calib.deltas and calib.q_lo <= calib.q
+    df, gt = simulate_sheet(seed=12)
+    out, rep = detect_coactivation_events(df, POS, "t", "id", "m", calibration=calib, return_report=True)
+    assert rep.level_quantile == calib.q
+    assert out.collid.nunique() >= 1
+
+
+def test_image_stack():
+    rng = np.random.default_rng(13)
+    T, Y, X = 80, 48, 48
+    yy, xx = np.mgrid[0:Y, 0:X]
+    stack = 1.0 + 0.05 * rng.normal(size=(T, Y, X))
+    d = np.hypot(yy - 24, xx - 24)
+    g = _pulse(20)
+    for t in range(T):
+        k = t - 20 - (d / 2).astype(int)  # a ring spreading 2 px per frame from frame 20
+        ok = (k >= 0) & (k < g.size) & (d < 20)
+        stack[t][ok] += g[k[ok]]
+    lab, rep = detect_coactivation_events_image(stack, tile=4, mask=None, return_report=True)
+    assert lab.shape == stack.shape and lab.dtype == np.int32
+    assert rep.n_events >= 1
+    assert (lab[:, d < 12] > 0).mean() > (lab[:, d > 22] > 0).mean()  # events where the ring is
+
+
+def test_cellgraph_neighbours_are_local(sheet):
+    df, _ = sheet
+    T, n = df.t.max() + 1, df.id.max() + 1
+    pos = df[POS].to_numpy().reshape(T, n, 2)
+    g = CellGraph(pos, np.ones((T, n), bool))
+    A = g.A_t[0].tocoo()
+    dist = np.hypot(*(pos[0, A.row] - pos[0, A.col]).T)
+    assert dist.max() < 25  # lattice spacing 10: no long Delaunay edges across the sheet

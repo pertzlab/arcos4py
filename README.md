@@ -29,6 +29,7 @@ The R package ARCOS ([https://github.com/dmattek/ARCOS](https://github.com/dmatt
 - Event tracking directly on image data
 - Split/merge detection
 - Motion prediction for robust temporal linking
+- Co-activation detection directly from continuous signals, without binarisation, with thresholds calibrated against time-shifted copies of the data (`detect_coactivation_events`, `ARCOS.track_coactive_events`)
 
 **Data format:** Long-table format with object coordinates, time, and optionally measurements; or binary image sequences for pixel-level analysis.
 

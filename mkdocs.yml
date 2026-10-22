@@ -7,6 +7,7 @@ nav:
   - Home: index.md
   - Installation: installation.md
   - Usage: usage.md
+  - Co-activation detection: coactivation.md
   - Modules: api.md
   - Contributing: contributing.md
   - Changelog: changelog.md

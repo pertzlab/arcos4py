@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+### Added
+- Co-activation event detection from continuous signals, without binarisation: `detect_coactivation_events`
+  (tracked cells), `detect_coactivation_events_image` (image stacks, via tiles), `calibrate_coactivation`
+  (one event definition across movies) and `ARCOS.track_coactive_events`. Thresholds are calibrated against
+  time-shifted copies of the data; the only parameter is `epsilon`, the expected number of false events per movie.
+  Heavy steps are compiled with numba.
+
 ## [0.3.3] - 2025-09-23
 ### Added
 - Added ability to use a global linker
