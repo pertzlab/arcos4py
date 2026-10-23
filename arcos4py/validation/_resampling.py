@@ -20,7 +20,7 @@ def _np_diff(arr: list[np.ndarray], axis: int):
     return [np.cumsum(np.diff(np.insert(i, 0, i[0], axis=0), axis=0), axis=0) for i in arr]
 
 
-def _get_xy_change(X: np.ndarray, object_ids: np.ndarray) -> tuple[pd.DataFrame, list[str]]:
+def _get_xy_change(X: np.ndarray, object_ids: np.ndarray) -> np.ndarray:
     """Calculate xy change for each object."""
     # get xy change for each object
     # make sure that X and object_ids are numpy arrays of the same length
@@ -42,12 +42,38 @@ def _get_xy_change(X: np.ndarray, object_ids: np.ndarray) -> tuple[pd.DataFrame,
 
 
 def shuffle_tracks(
-    df: pd.DataFrame, object_id_column: str = 'track_id', positoin_column: list = ['x', 'y'], frame_column='t', seed=42
+    df: pd.DataFrame,
+    object_id_column: str = 'track_id',
+    position_columns: list | None = None,
+    frame_column='t',
+    seed=42,
+    **kwargs,
 ) -> pd.DataFrame:
     """Resample tracks by switching the first timepoint\
-        positions of two tracks and then propagating the cummulative difference."""
-    df.sort_values([object_id_column, frame_column], inplace=True)  # needs to be sorted for _get_xy_change to work
-    df_pos_cols_np = df[positoin_column].to_numpy()
+        positions of two tracks and then propagating the cummulative difference.
+
+    Arguments:
+        df (pd.DataFrame): The dataframe containing the data to be resampled.
+        object_id_column (str): The column name of the object ID.
+        position_columns (list | None): The column names of the positions. Default ['x', 'y'].
+        frame_column (str): The column name of the frame.
+        seed (int): The random seed.
+        **kwargs (Any): Additional keyword arguments. Includes deprecated parameters.
+            - positoin_column (list): Deprecated. Use position_columns instead.
+
+    Returns:
+        pd.DataFrame: The resampled dataframe.
+    """
+    map_deprecated_params = {"positoin_column": "position_columns"}
+    for key in kwargs:
+        if key not in map_deprecated_params:
+            raise ValueError(f"Got an unexpected keyword argument '{key}'")
+    if position_columns is not None:
+        kwargs["position_columns"] = position_columns  # lets the helper warn when both names are given
+    position_columns = handle_deprecated_params(map_deprecated_params, **kwargs).get("position_columns", ['x', 'y'])
+
+    df = df.sort_values([object_id_column, frame_column])  # sorted for _get_xy_change; the input is not modified
+    df_pos_cols_np = df[position_columns].to_numpy(copy=True)
     factorized_oid, _ = pd.factorize(df[object_id_column])
 
     # Set the random seed
@@ -75,11 +101,9 @@ def shuffle_tracks(
             continue
         random_track_id = rng.choice(available_track_ids)
         # Get the rows with the current track ID
-        track_rows = np.argwhere(factorized_oid == track_id)
-        track_rows = track_rows.flatten()
+        track_rows = np.flatnonzero(factorized_oid == track_id)
         # Get the rows with the random track ID
-        random_track_rows = np.argwhere(factorized_oid == random_track_id)
-        random_track_rows = random_track_rows.flatten()
+        random_track_rows = np.flatnonzero(factorized_oid == random_track_id)
 
         # Switch the first timepoint positions of the two tracks
         start_pos_random = df_pos_cols_np[random_track_rows[0]].copy()
@@ -94,7 +118,7 @@ def shuffle_tracks(
         df_pos_cols_np[random_track_rows] += xy_change[random_track_rows]
         switched_tracks.add(random_track_id)
     df_out = df.copy(deep=True)
-    df_out[positoin_column] = df_pos_cols_np
+    df_out[position_columns] = df_pos_cols_np
     return df_out
 
 
@@ -113,12 +137,11 @@ def shuffle_timepoints(
     unique_track_ids = np.unique(track_ids)
 
     # get timepoints
-    df_t_np = df_new[frame_column].to_numpy()
+    df_t_np = df_new[frame_column].to_numpy(copy=True)
     # Iterate over the unique track IDs
     for track_id in unique_track_ids:
         # Get the rows with the current track ID
-        track_rows = np.argwhere(track_ids == track_id)
-        track_rows = track_rows.flatten()
+        track_rows = np.flatnonzero(track_ids == track_id)
         df_t_shuffle = df_t_np[track_rows]
         # Shuffle the timepoints
         rng.shuffle(df_t_shuffle)
@@ -157,8 +180,8 @@ def shuffle_activity_bocks_per_trajectory(
     # raise warning if 1 makes up more than 25% of the array
     if np.sum(df_new[measurement_column]) / df_new[measurement_column].size > 0.25:
         warnings.warn(
-            'More than 25%% of the data in meas_column is 1.\
-            This could impact the validity of this resampling approach.'
+            'More than 25% of the data in meas_column is 1. '
+            'This could impact the validity of this resampling approach.'
         )
 
     # Set the random seed
@@ -218,12 +241,11 @@ def shuffle_coordinates_per_timepoint(
     unique_timepoints = np.unique(timepoints)
 
     # get coordinates
-    df_tp_col_np = df_new[position_columns].to_numpy()
+    df_tp_col_np = df_new[position_columns].to_numpy(copy=True)
     # Iterate over the unique track IDs
     for tp in unique_timepoints:
         # Get the rows with the current track ID
-        tp_rows = np.argwhere(timepoints == tp)
-        tp_rows = tp_rows.flatten()
+        tp_rows = np.flatnonzero(timepoints == tp)
         df_pos_shuffle = df_tp_col_np[tp_rows]
         # Shuffle the coordinates
         rng.shuffle(df_pos_shuffle)
@@ -245,12 +267,11 @@ def shift_timepoints_per_trajectory(
     unique_track_ids = np.unique(track_ids)
 
     # get timepoints
-    df_t_np = df_new[frame_column].to_numpy()
+    df_t_np = df_new[frame_column].to_numpy(copy=True)
     # Iterate over the unique track IDs
     for track_id in unique_track_ids:
         # Get the rows with the current track ID
-        track_rows = np.argwhere(track_ids == track_id)
-        track_rows = track_rows.flatten()
+        track_rows = np.flatnonzero(track_ids == track_id)
         timepoints = df_t_np[track_rows]
         # Get the shift
         shift = rng.integers(-timepoints.size, timepoints.size)
@@ -258,6 +279,7 @@ def shift_timepoints_per_trajectory(
         timepoints = np.roll(timepoints, shift)
         df_t_np[track_rows] = timepoints
 
+    df_new[frame_column] = df_t_np  # write the shifted timepoints back (was relying on a writable view)
     df_new.sort_values(by=[object_id_column, frame_column], inplace=True)
     return df_new
 
@@ -399,14 +421,14 @@ def resample_data(  # noqa: C901
     # check if there are any Nan in the columns selected
     na_cols = []
     for i in relevant_columns:
-        if data[position_columns].isnull().values.any():
+        if data[i].isnull().values.any():
             na_cols.append(i)
     if na_cols:
         warnings.warn(f'NaN values in {na_cols}, default behaviour is to drop these rows')
-        data.dropna(subset=na_cols, inplace=True)
+        data = data.dropna(subset=na_cols)  # not in place: the caller's DataFrame is left unchanged
 
     # Sort the data
-    data.sort_values([obj_id_column, frame_column], inplace=True)
+    data = data.sort_values([obj_id_column, frame_column])
 
     rng = np.random.default_rng(seed)
     # create a list of random numbers between 0 and 1000000

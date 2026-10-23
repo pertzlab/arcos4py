@@ -9,7 +9,7 @@ Example:
 import pandas as pd
 
 from ._arcos4py_deprecation import handle_deprecated_params
-from ._stats import calcCollevStats
+from ._stats import calculate_statistics
 
 
 class filterCollev:
@@ -108,8 +108,7 @@ class filterCollev:
 
         if self.data.empty:
             return self.data
-        stats = calcCollevStats()
-        stats_df = stats.calculate(self.data, self.frame_column, self.clid_column, self.obj_id_column)
+        stats_df = calculate_statistics(self.data, self.frame_column, self.clid_column, self.obj_id_column)
 
         filtered_df = self._filter_collev(
             data=self.data,

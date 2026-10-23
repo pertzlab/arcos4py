@@ -10,12 +10,11 @@ authors = [
 classifiers     = [
     "License :: OSI Approved :: MIT License",
     "Natural Language :: English",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 urls            = { Homepage = "https://github.com/pertzlab/arcos4py" }
 
 dependencies = [
@@ -59,6 +58,7 @@ doc  = [
     "mkdocstrings-python>=1.2.1",
     "mkdocs-material-extensions>=1.0.3",
     "mkdocs-autorefs>=0.5.0",
+    "pymdown-extensions<12",  # 12 changed Highlight(); mkdocstrings 1.0.x breaks with it
 ]
 
 
@@ -71,7 +71,7 @@ packages = [
 [tool.black]
 line-length = 120
 skip-string-normalization = true
-target-version = ['py310', 'py311', 'py312', 'py313']
+target-version = ['py311', 'py312', 'py313']
 include = '\.pyi?$'
 exclude = '''
 /(

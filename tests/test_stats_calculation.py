@@ -176,3 +176,17 @@ def test_calculate_statistics_per_frame():
     )
     result = calculate_statistics_per_frame(data, 'frame_column', 'collid_column', position_columns=['x', 'y'])
     assert result.loc[result['frame_column'] == 1, 'convex_hull_area'].values[0] == 0
+
+
+def test_filterCollev_does_not_use_deprecated_stats():
+    import warnings
+
+    from arcos4py.tools import filterCollev
+
+    df = pd.DataFrame({'t': [1, 2, 3, 1, 2], 'collid': [1, 1, 1, 2, 2], 'id': [1, 1, 2, 3, 3]})
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', DeprecationWarning)
+        out = filterCollev(df, frame_column='t', clid_column='collid', obj_id_column='id').filter(
+            min_duration=3, min_total_size=2
+        )
+    assert set(out['collid']) == {1}

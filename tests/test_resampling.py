@@ -138,6 +138,15 @@ def test_shuffle_coordinates_per_timepoint():
         np.testing.assert_array_equal(df_new['y'].values, [7, 8, 9, 10, 11, 12])
 
 
+def test_shuffle_tracks_does_not_modify_input():
+    test_df = pd.DataFrame(
+        {'t': [3, 2, 1, 1, 2, 3], 'track_id': [1, 1, 1, 2, 2, 2], 'x': [3, 2, 1, 4, 6, 8], 'y': [4, 3, 2, 5, 7, 9]}
+    )
+    before = test_df.copy()
+    shuffle_tracks(test_df, object_id_column='track_id', frame_column='t', seed=42)
+    pd.testing.assert_frame_equal(test_df, before)
+
+
 def test_shift_timepoints_per_trajectory():
     # Create test dataframe
     test_df = pd.DataFrame(
@@ -240,3 +249,42 @@ def test_resample_data():
         data, posCols, frame_column, id_column, method=method, n=n, seed=seed + 1, verbose=False
     )
     assert not resampled_data.equals(resampled_data_3)
+
+
+def test_shuffle_tracks_deprecated_position_column_alias():
+    test_df = pd.DataFrame(
+        {'t': [1, 2, 3, 1, 2, 3], 'track_id': [1, 1, 1, 2, 2, 2], 'a': [1, 2, 3, 4, 6, 8], 'b': [2, 3, 4, 5, 7, 9]}
+    )
+    expected = shuffle_tracks(test_df, 'track_id', ['a', 'b'], 't', seed=42)
+    with pytest.warns(DeprecationWarning, match="'positoin_column' parameter is deprecated"):
+        df_new = shuffle_tracks(test_df, object_id_column='track_id', positoin_column=['a', 'b'], frame_column='t')
+    pd.testing.assert_frame_equal(df_new, expected)
+    with pytest.raises(ValueError, match='unexpected keyword'):
+        shuffle_tracks(test_df, position_column=['a', 'b'])
+    with pytest.warns(DeprecationWarning, match='Both'):
+        shuffle_tracks(test_df, 'track_id', ['x'], 't', positoin_column=['a', 'b'])
+
+
+def test_resample_data_does_not_modify_input():
+    data = pd.DataFrame(
+        {
+            'time': [5, 4, 3, 2, 1, 1, 2, 3, 4, 5],
+            'track_id': [1, 1, 1, 1, 1, 2, 2, 2, 2, 2],
+            'x': [1, 2, 3, np.nan, 5, 6, 7, 8, 9, 10],
+            'y': [21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+        }
+    )
+    before = data.copy()
+    with pytest.warns(UserWarning, match=r"NaN values in \['x'\]"):
+        resample_data(
+            data,
+            ['x', 'y'],
+            'time',
+            'track_id',
+            n=2,
+            allow_duplicates=True,
+            show_progress=False,
+            parallel_processing=False,
+            verbose=False,
+        )
+    pd.testing.assert_frame_equal(data, before)

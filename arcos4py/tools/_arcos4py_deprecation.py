@@ -16,16 +16,16 @@ def handle_deprecated_params(param_mapping, **kwargs):
         if old_param in updated_kwargs:
             # Issue a deprecation warning
             warnings.warn(
-                f"The '{old_param}' parameter is deprecated and will be removed in a future version.\
-                Please use '{new_param}' instead.",
+                f"The '{old_param}' parameter is deprecated and will be removed in a future version. "
+                f"Please use '{new_param}' instead.",
                 DeprecationWarning,
                 stacklevel=3,
             )
             if new_param in updated_kwargs:
                 # If both new and old parameters are provided, overwrite the new with the old
                 warnings.warn(
-                    f"Both '{old_param}' and '{new_param}' are provided. '{old_param}' will take precedence over\
-                         '{new_param}'. Consider using only '{new_param}' in future.",
+                    f"Both '{old_param}' and '{new_param}' are provided. '{old_param}' will take precedence over "
+                    f"'{new_param}'. Consider using only '{new_param}' in future.",
                     DeprecationWarning,
                     stacklevel=3,
                 )

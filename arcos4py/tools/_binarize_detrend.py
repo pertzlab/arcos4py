@@ -283,7 +283,7 @@ class binData(detrender):
         col_bin = f"{measurement_column}.bin"
         cols = [measurement_column]
         x = x.sort_values(frame_column)
-        data_np = x[cols].to_numpy()
+        data_np = x[cols].to_numpy(copy=True)
 
         if self.bias_method == "none":
             rescaled_data = self._rescale_data(data_np, measurement_index=0)
@@ -307,7 +307,7 @@ class binData(detrender):
         value, _ = x[group_column].factorize()
         x[col_fact] = value
 
-        data_np = x[cols].to_numpy()
+        data_np = x[cols].to_numpy(copy=True)
 
         if self.bias_method == "none":
             rescaled_data = self._rescale_data(data_np, measurement_index=1)
