@@ -739,6 +739,7 @@ def detect_matrix(
     best, table, lvl = _select_level(mv, level_list, core_ladder, len(level_quantiles) * len(core_ladder), fixed_deltas)
     report = CoactivationReport(table=pd.DataFrame(table), baseline_window=binfo["window"], smooth_k=smooth_k)
     report.calibration_data = mv.calib_data if return_calibration_data else None
+    report.activity = mv.D
     if best is None:
         return np.zeros((T, n), np.int32), report
     _, q, m, comp, keep = best
@@ -800,6 +801,9 @@ class CoactivationReport:
         table (pd.DataFrame): every level and core tried.
         contacts (pd.DataFrame): pairs of events that touch.
         lineage (pd.DataFrame | None): merges (allow_merges=True).
+        activity (pd.Series | np.ndarray | None): the detrended activity dR the detector works on (smoothed
+            signal minus the resting-frame baseline). From detect_coactivation_events: one value per input row
+            (index of X); on the matrix and image paths: a (T, n_units) array.
     """
 
     level_quantile: float = float("nan")
@@ -816,6 +820,7 @@ class CoactivationReport:
     contacts: pd.DataFrame = field(default_factory=pd.DataFrame, repr=False)
     lineage: pd.DataFrame | None = field(default=None, repr=False)
     calibration_data: dict | None = field(default=None, repr=False)
+    activity: pd.Series | np.ndarray | None = field(default=None, repr=False)
 
 
 # ============================================================================ public API (tracked cells)
@@ -914,6 +919,8 @@ def detect_coactivation_events(
         calibration=calibration,
         smooth_k=smooth_k,
     )
+    if report.activity is not None:
+        report.activity = pd.Series(report.activity[rows], index=X.index, name="activity")
     res = X.copy()
     res[clid_column] = lab[rows].astype(np.int64)
     res = res[res[clid_column] > 0].reset_index(drop=True)

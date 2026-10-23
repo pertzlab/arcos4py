@@ -383,3 +383,14 @@ def test_calibration_remembers_smooth_k():
     detect_coactivation_events(df, POS, "t", "id", "m", calibration=calib, smooth_k=5)
     with pytest.raises(ValueError, match="smooth_k=5"):
         detect_coactivation_events(df, POS, "t", "id", "m", calibration=calib)
+
+
+def test_report_activity(sheet):
+    df, gt = sheet
+    shuffled = df.sample(frac=1.0, random_state=0)  # activity follows the index of X, not its order
+    out, rep = detect_coactivation_events(shuffled, POS, "t", "id", "m", return_report=True)
+    act = rep.activity
+    assert isinstance(act, pd.Series) and act.index.equals(shuffled.index)
+    assert act.notna().all()
+    truth = pd.Series(gt, index=df.index).loc[shuffled.index]
+    assert act[truth > 0].median() > 0.3 > abs(act[truth == 0].median())
