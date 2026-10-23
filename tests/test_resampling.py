@@ -249,3 +249,15 @@ def test_resample_data():
         data, posCols, frame_column, id_column, method=method, n=n, seed=seed + 1, verbose=False
     )
     assert not resampled_data.equals(resampled_data_3)
+
+
+def test_shuffle_tracks_deprecated_position_column_alias():
+    test_df = pd.DataFrame(
+        {'t': [1, 2, 3, 1, 2, 3], 'track_id': [1, 1, 1, 2, 2, 2], 'a': [1, 2, 3, 4, 6, 8], 'b': [2, 3, 4, 5, 7, 9]}
+    )
+    expected = shuffle_tracks(test_df, 'track_id', ['a', 'b'], 't', seed=42)
+    with pytest.warns(DeprecationWarning, match="'positoin_column' parameter is deprecated"):
+        df_new = shuffle_tracks(test_df, object_id_column='track_id', positoin_column=['a', 'b'], frame_column='t')
+    pd.testing.assert_frame_equal(df_new, expected)
+    with pytest.raises(TypeError, match='unexpected keyword'):
+        shuffle_tracks(test_df, position_column=['a', 'b'])

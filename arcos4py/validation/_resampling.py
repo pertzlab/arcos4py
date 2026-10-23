@@ -42,12 +42,38 @@ def _get_xy_change(X: np.ndarray, object_ids: np.ndarray) -> tuple[pd.DataFrame,
 
 
 def shuffle_tracks(
-    df: pd.DataFrame, object_id_column: str = 'track_id', positoin_column: list = ['x', 'y'], frame_column='t', seed=42
+    df: pd.DataFrame,
+    object_id_column: str = 'track_id',
+    position_columns: list = ['x', 'y'],
+    frame_column='t',
+    seed=42,
+    **kwargs,
 ) -> pd.DataFrame:
     """Resample tracks by switching the first timepoint\
-        positions of two tracks and then propagating the cummulative difference."""
+        positions of two tracks and then propagating the cummulative difference.
+
+    Arguments:
+        df (pd.DataFrame): The dataframe containing the data to be resampled.
+        object_id_column (str): The column name of the object ID.
+        position_columns (list): The column names of the positions.
+        frame_column (str): The column name of the frame.
+        seed (int): The random seed.
+        **kwargs (Any): Additional keyword arguments. Includes deprecated parameters.
+            - positoin_column (list): Deprecated. Use position_columns instead.
+
+    Returns:
+        pd.DataFrame: The resampled dataframe.
+    """
+    map_deprecated_params = {"positoin_column": "position_columns"}
+    for key in kwargs:
+        if key not in map_deprecated_params:
+            raise TypeError(f"shuffle_tracks() got an unexpected keyword argument '{key}'")
+    position_columns = handle_deprecated_params(map_deprecated_params, **kwargs).get(
+        "position_columns", position_columns
+    )
+
     df = df.sort_values([object_id_column, frame_column])  # sorted for _get_xy_change; the input is not modified
-    df_pos_cols_np = df[positoin_column].to_numpy(copy=True)
+    df_pos_cols_np = df[position_columns].to_numpy(copy=True)
     factorized_oid, _ = pd.factorize(df[object_id_column])
 
     # Set the random seed
@@ -94,7 +120,7 @@ def shuffle_tracks(
         df_pos_cols_np[random_track_rows] += xy_change[random_track_rows]
         switched_tracks.add(random_track_id)
     df_out = df.copy(deep=True)
-    df_out[positoin_column] = df_pos_cols_np
+    df_out[position_columns] = df_pos_cols_np
     return df_out
 
 
@@ -157,8 +183,8 @@ def shuffle_activity_bocks_per_trajectory(
     # raise warning if 1 makes up more than 25% of the array
     if np.sum(df_new[measurement_column]) / df_new[measurement_column].size > 0.25:
         warnings.warn(
-            'More than 25%% of the data in meas_column is 1.\
-            This could impact the validity of this resampling approach.'
+            'More than 25% of the data in meas_column is 1. '
+            'This could impact the validity of this resampling approach.'
         )
 
     # Set the random seed

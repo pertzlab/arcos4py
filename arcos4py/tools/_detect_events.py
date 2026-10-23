@@ -1626,8 +1626,8 @@ class ImageTracker(BaseTracker):
             raise ValueError("Seed image must be a label image (integer type).")
         if self.linker.frame_counter != -1:
             warnings.warn(
-                "Seed image is intended to be used before any tracking is done. If\
-                used after first frame coordinates in memory will be overwriten if present."
+                "Seed image is intended to be used before any tracking is done. If "
+                "used after first frame coordinates in memory will be overwriten if present."
             )
 
         seed_image = downscale_image(seed_image, self._downsample)
