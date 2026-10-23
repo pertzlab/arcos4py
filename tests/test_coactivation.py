@@ -16,7 +16,7 @@ from arcos4py.tools import (
     detect_coactivation_events_image,
     filterCollev,
 )
-from arcos4py.tools._coactivation import null_threshold
+from arcos4py.tools._coactivation import _to_matrix, detect_matrix, null_threshold
 from arcos4py.tools._coactivation_baseline import interp_columns, masked_baseline_activity
 from arcos4py.tools._coactivation_graph import CellGraph
 
@@ -394,3 +394,43 @@ def test_report_activity(sheet):
     assert act.notna().all()
     truth = pd.Series(gt, index=df.index).loc[shuffled.index]
     assert act[truth > 0].median() > 0.3 > abs(act[truth == 0].median())
+
+
+def test_simultaneous_origins_are_separate_events():
+    # three waves that start in the same frame ~10 cells apart and grow into each other: three events
+    waves = ((50.0, 100.0, 30), (150.0, 100.0, 30), (100.0, 180.0, 30))
+    df, gt = simulate_sheet(seed=0, waves=waves, T=110)
+    out = detect_coactivation_events(df, POS, "t", "id", "m")
+    rows = df.assign(truth=gt).merge(out[["t", "id", "collid"]], on=["t", "id"], how="left")
+    ids = [rows.collid[(rows.truth == w).to_numpy() & rows.collid.notna().to_numpy()].mode().iloc[0] for w in (1, 2, 3)]
+    assert len(set(ids)) == 3
+
+
+def test_every_event_has_a_single_origin(sheet):
+    from arcos4py.tools._coactivation import _near
+
+    df, _ = sheet
+    S, observed, pos_t, rows = _to_matrix(df, POS, "t", "id", "m")
+    g = CellGraph(pos_t, observed)
+    lab, _ = detect_matrix(S, observed, g)
+    for e in range(1, lab.max() + 1):
+        t0 = np.flatnonzero((lab == e).any(1))[0]
+        first = np.flatnonzero(lab[t0] == e)
+        k, _ = csgraph.connected_components(_near(g, t0)[first][:, first], directed=False)
+        assert k == 1  # the event appears as one piece
+
+
+def test_single_origin_drops_parts_before_contact():
+    from arcos4py.tools._coactivation import single_origin
+    from arcos4py.tools._coactivation_graph import GridGraph
+
+    keep = np.argwhere(np.ones((1, 12), bool))  # a row of 12 tiles: 0 - 1 - ... - 11
+    g = GridGraph(keep, 4)
+    lab = np.zeros((4, 12), np.int32)
+    lab[0, 0] = lab[1, :2] = 1  # the origin grows from tile 0
+    lab[1, 9:] = 1  # a separate patch far away, before the front reaches it
+    lab[2, :6] = lab[2, 9:] = 1  # still separate
+    lab[3, :] = 1  # the front reaches it
+    out = single_origin(lab, g)
+    assert (out[1, 9:] == 0).all() and (out[2, 9:] == 0).all()
+    assert (out[3] == 1).all() and (out[1, :2] == 1).all()

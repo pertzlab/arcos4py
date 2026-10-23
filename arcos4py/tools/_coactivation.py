@@ -21,8 +21,8 @@ Steps:
    and core with the most events are kept (ties: the most stringent).
 6. Growth: events are grown into weaker co-active pulses (lowest level) that are onset-linked to them.
 7. Membership: full width at half maximum of each event (per-event threshold, per-cell runs).
-8. Births: inside every event, units are tracked frame by frame (ARCOS-style); activations that started
-   separately and are large enough to be more than chance stay separate events.
+8. Births: inside every event, units are tracked frame by frame (ARCOS-style), so that every event has a
+   single origin; activations that started separately and are larger than chance are events of their own.
 9. Start of membership read on the unsmoothed dR (the smoothing delays sharp rises).
 10. Early outliers removed: a member that started more than k frames before every neighbouring member of
     its event (k: the lag at which neighbour pairs are still >= 2.5x as common as by chance) is most often a
@@ -51,6 +51,7 @@ N_PREV = 2
 LINK_K = 1
 MEMBERSHIP_FRAC = 0.5
 STRICT_RATIO = 2.5
+ORIGIN_HOPS = 2  # parts of an event closer than this (one non-member unit between them) are connected
 
 
 # ============================================================================ null calibration
@@ -214,40 +215,129 @@ def _track_seeded(graph, binary, seedable, seed_size):
     )
 
 
-def _join_simultaneous_births(sub, flat, e, eu, ev, n, delta):
-    """Join births of event e that start and touch close together in time.
+def _merge_close_starts(sub, graph, hops):
+    """Births that appear in the same frame within `hops` neighbour steps of each other are one start.
 
-    Births that start within delta frames of each other and touch within delta frames of the later start are
-    one start (patches of one front, or a pulse of the whole field).
+    The tracker opens a birth per unlinked cluster; patches of one front (or of a whole-field pulse) that
+    appear together but do not quite touch are one origin. Returns the labels, merged births taking the
+    smallest label.
     """
-    T = sub.shape[0]
     nb = int(sub.max()) + 1
+    if nb <= 2:
+        return sub
+    T = sub.shape[0]
     start = np.full(nb, T)
     tt, ii = np.nonzero(sub)
     np.minimum.at(start, sub[tt, ii], tt)
-    sf = sub.ravel()
-    inside = (flat[eu] == e) & (flat[ev] == e)
-    a, b = sf[eu[inside]], sf[ev[inside]]
-    fr = np.minimum(eu[inside], ev[inside]) // n
-    k = (a > 0) & (b > 0) & (a != b)
-    a, b, fr = a[k], b[k], fr[k]
-    close = (fr - np.maximum(start[a], start[b]) <= delta) & (np.abs(start[a] - start[b]) <= delta)
-    if not close.any():
+    pairs = []
+    for t in np.unique(start[1:][start[1:] < T]):
+        born = np.flatnonzero(start == t)
+        born = born[born > 0]
+        if born.size < 2:
+            continue
+        cells = {int(b): np.flatnonzero(sub[t] == b) for b in born}
+        for b in born:
+            d = csgraph.dijkstra(graph.A_t[t], unweighted=True, indices=cells[int(b)], min_only=True, limit=hops)
+            for c in born:
+                if c > b and np.isfinite(d[cells[int(c)]]).any():
+                    pairs.append((int(b), int(c)))
+    if not pairs:
         return sub
-    G = sparse.coo_matrix((np.ones(close.sum()), (a[close], b[close])), shape=(nb, nb))
-    _, comp = csgraph.connected_components(G, directed=False)
+    a, b = np.array(pairs).T
+    _, comp = csgraph.connected_components(sparse.coo_matrix((np.ones(a.size), (a, b)), shape=(nb, nb)), directed=False)
     first = {}
-    for lbl in np.argsort(start):
+    for lbl in range(nb):
         first.setdefault(comp[lbl], lbl)
     lut = np.array([first[comp[x]] for x in range(nb)])
     lut[0] = 0
     return lut[sub]
 
 
-def separate_births(lab, graph, eu, ev, seedable, min_cells, delta):
-    """Inside every event, activations that started separately and reach >= min_cells units stay separate.
+def _birth_peak_seeds(sub, seedable):
+    """Per birth label: the most co-active (seedable) units it holds in any single frame."""
+    tt, ii = np.nonzero(sub)
+    if tt.size == 0:
+        return np.zeros(int(sub.max()) + 1, np.int64)
+    s = seedable[tt, ii]
+    key = sub[tt, ii].astype(np.int64) * sub.shape[0] + tt
+    per_frame = np.bincount(key, weights=s, minlength=(int(sub.max()) + 1) * sub.shape[0])
+    return per_frame.reshape(-1, sub.shape[0]).max(1).astype(np.int64)
 
-    Smaller births and unlinked unit-frames join the nearest large birth (space-time distance).
+
+def _near(graph, t):
+    """Units of frame t within ORIGIN_HOPS neighbour steps of each other (cached on the graph)."""
+    cache = graph.__dict__.setdefault("_near_cache", {})
+    key = 0 if graph.static_A is not None else t
+    if key not in cache:
+        A = graph.A_t[t].astype(np.int32)
+        reach = A
+        for _ in range(ORIGIN_HOPS - 1):
+            reach = reach + reach @ A
+        cache[key] = (reach > 0).tocsr()
+    return cache[key]
+
+
+def _grow_from_origin(owner, is_big, nodes, graph, n):
+    """Keep a unit-frame that is not part of a large birth only once that birth's body has reached it.
+
+    Frame by frame, a unit-frame stays with its owner if, in that frame, it is connected (through members with
+    the same owner, gaps of up to ORIGIN_HOPS - 1 non-member units allowed) to the birth's own units or to units
+    already kept, or if the same unit was kept in the previous frame. Separate patches are therefore not part
+    of an event before its front reaches them.
+    """
+    owner = owner.copy()
+    t_of, u_of = nodes // n, nodes % n
+    kept_prev = {}
+    for t in np.unique(t_of):
+        sel = np.flatnonzero((t_of == t) & (owner > 0))
+        if sel.size == 0:
+            kept_prev = {}
+            continue
+        units = u_of[sel]
+        _, cc = csgraph.connected_components(_near(graph, t)[units][:, units], directed=False)
+        seed = is_big[sel] | np.array([kept_prev.get(int(u)) == int(o) for u, o in zip(units, owner[sel])])
+        for c in np.unique(cc):
+            part = cc == c
+            for o in np.unique(owner[sel][part]):
+                grp = part & (owner[sel] == o)
+                if not seed[grp].any():
+                    owner[sel[grp]] = 0
+        kept = sel[owner[sel] > 0]
+        kept_prev = dict(zip(u_of[kept].tolist(), owner[kept].tolist()))
+    return owner
+
+
+def single_origin(lab, graph):
+    """Final check that every event grows from one origin.
+
+    The origin is the largest connected piece of the event's first frame; every other unit-frame stays only if
+    the event's body has reached it (_grow_from_origin). Needed after the membership refinements, which can
+    move a member's start to before the front reached it.
+    """
+    T, n = lab.shape
+    out = lab.copy()
+    o = out.ravel()
+    for e in np.unique(lab[lab > 0]):
+        nodes = np.flatnonzero(lab.ravel() == e)
+        t0 = int(nodes[0] // n)  # nodes are sorted by frame
+        first = nodes[nodes // n == t0] % n
+        _, cc = csgraph.connected_components(_near(graph, t0)[first][:, first], directed=False)
+        origin = set((t0 * n + first[cc == np.argmax(np.bincount(cc))]).tolist())
+        is_origin = np.array([x in origin for x in nodes.tolist()])
+        o[nodes] = _grow_from_origin(np.full(nodes.size, int(e)), is_origin, nodes, graph, n)
+    return out
+
+
+def separate_births(lab, graph, eu, ev, seedable, min_cells):
+    """Give every event a single origin.
+
+    Inside each event, units are tracked frame by frame (ARCOS-style) and every separate start is a birth from
+    the frame it appears (patches appearing together within the tracker's link distance are one start). A birth
+    that in some frame holds >= min_cells co-active units (more than chance produces) is an event of its own;
+    if none does, the birth with the most co-active units is the event's origin.
+    Smaller births and the remaining members join the nearest large birth they connect to (in space-time,
+    through the event's members), but only from the frame on that its front reaches them (_grow_from_origin);
+    before that, or if they connect to none, they are not part of an event.
     """
     T, n = lab.shape
     out = lab.copy()
@@ -255,14 +345,20 @@ def separate_births(lab, graph, eu, ev, seedable, min_cells, delta):
     flat = lab.ravel()
     for e in np.unique(lab[lab > 0]):
         mask = lab == e
-        sub = np.where(mask, _track_seeded(graph, mask, seedable & mask, min_cells), 0)
-        if sub.max() > 1:
-            sub = _join_simultaneous_births(sub, flat, e, eu, ev, n, delta)
-        n_cells = np.array([np.unique(np.nonzero(sub == k)[1]).size for k in range(sub.max() + 1)])
-        big = np.flatnonzero(n_cells >= min_cells)
-        big = big[big > 0]
-        if big.size <= 1:
+        sub = np.where(mask, _track_seeded(graph, mask, seedable & mask, 1), 0)
+        if sub.max() == 0:
             continue
+        sub = _merge_close_starts(sub, graph, 2 * LINK_K + 1)
+        peak = _birth_peak_seeds(sub, seedable)
+        peak[0] = -1
+        big = np.flatnonzero(peak >= min_cells)
+        if big.size == 0:  # no start alone is larger than chance (the onset group was): its strongest is the origin
+            big = np.array([int(np.argmax(peak))])
+        nb = int(sub.max()) + 1
+        start = np.full(nb, T)
+        tt, ii = np.nonzero(sub)
+        np.minimum.at(start, sub[tt, ii], tt)
+        n_cells = np.array([np.unique(np.nonzero(sub == k)[1]).size for k in range(nb)])
         nodes = np.flatnonzero(mask.ravel())
         idx = np.full(T * n, -1)
         idx[nodes] = np.arange(nodes.size)
@@ -278,9 +374,12 @@ def separate_births(lab, graph, eu, ev, seedable, min_cells, delta):
             ]
         )
         owner = big[np.argmin(dist, axis=0)]
-        owner = np.where(np.isin(sf, big), sf, owner)
+        is_big = np.isin(sf, big)
+        owner = np.where(is_big, sf, np.where(np.isfinite(dist.min(0)), owner, 0))
+        owner = _grow_from_origin(owner, is_big, nodes, graph, n)
         largest = big[np.argmax(n_cells[big])]
         new_ids = {int(b): (int(e) if b == largest else next_id + k) for k, b in enumerate(big)}
+        new_ids[0] = 0
         next_id += big.size
         o = out.ravel()
         o[nodes] = np.array([new_ids[int(x)] for x in owner])
@@ -762,7 +861,7 @@ def detect_matrix(
     eu, ev = spacetime_edges(graph, observed)
     null_L = [Ln for _, Ln in (mv.nulls if mv.nulls else calibration.own_null(mv.D, observed, graph, mv.cap, mv.rng))]
     seed_size = _null_seed_size(graph, null_L, observed, h, epsilon)
-    lab = separate_births(lab, graph, eu, ev, observed & (mv.L > h), seed_size, delta)
+    lab = separate_births(lab, graph, eu, ev, observed & (mv.L > h), seed_size)
     lineage = None
     if allow_merges:
         lab, lineage = apply_merges(lab, event_contacts(lab, group, eu, ev, n))
@@ -771,6 +870,7 @@ def detect_matrix(
     prune_k = _prune_window(mv, lvl, q, delta) if prune_early else None
     if prune_k is not None:
         lab = prune_early_members(lab, graph, prune_k)
+    lab = single_origin(lab, graph)
     u = np.unique(lab)
     lab = _relabel(lab)
     report.level_quantile, report.level, report.onset_window, report.core = q, h, delta, m
