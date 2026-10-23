@@ -20,7 +20,7 @@ def _np_diff(arr: list[np.ndarray], axis: int):
     return [np.cumsum(np.diff(np.insert(i, 0, i[0], axis=0), axis=0), axis=0) for i in arr]
 
 
-def _get_xy_change(X: np.ndarray, object_ids: np.ndarray) -> tuple[pd.DataFrame, list[str]]:
+def _get_xy_change(X: np.ndarray, object_ids: np.ndarray) -> np.ndarray:
     """Calculate xy change for each object."""
     # get xy change for each object
     # make sure that X and object_ids are numpy arrays of the same length
@@ -101,11 +101,9 @@ def shuffle_tracks(
             continue
         random_track_id = rng.choice(available_track_ids)
         # Get the rows with the current track ID
-        track_rows = np.argwhere(factorized_oid == track_id)
-        track_rows = track_rows.flatten()
+        track_rows = np.flatnonzero(factorized_oid == track_id)
         # Get the rows with the random track ID
-        random_track_rows = np.argwhere(factorized_oid == random_track_id)
-        random_track_rows = random_track_rows.flatten()
+        random_track_rows = np.flatnonzero(factorized_oid == random_track_id)
 
         # Switch the first timepoint positions of the two tracks
         start_pos_random = df_pos_cols_np[random_track_rows[0]].copy()
@@ -143,8 +141,7 @@ def shuffle_timepoints(
     # Iterate over the unique track IDs
     for track_id in unique_track_ids:
         # Get the rows with the current track ID
-        track_rows = np.argwhere(track_ids == track_id)
-        track_rows = track_rows.flatten()
+        track_rows = np.flatnonzero(track_ids == track_id)
         df_t_shuffle = df_t_np[track_rows]
         # Shuffle the timepoints
         rng.shuffle(df_t_shuffle)
@@ -248,8 +245,7 @@ def shuffle_coordinates_per_timepoint(
     # Iterate over the unique track IDs
     for tp in unique_timepoints:
         # Get the rows with the current track ID
-        tp_rows = np.argwhere(timepoints == tp)
-        tp_rows = tp_rows.flatten()
+        tp_rows = np.flatnonzero(timepoints == tp)
         df_pos_shuffle = df_tp_col_np[tp_rows]
         # Shuffle the coordinates
         rng.shuffle(df_pos_shuffle)
@@ -275,8 +271,7 @@ def shift_timepoints_per_trajectory(
     # Iterate over the unique track IDs
     for track_id in unique_track_ids:
         # Get the rows with the current track ID
-        track_rows = np.argwhere(track_ids == track_id)
-        track_rows = track_rows.flatten()
+        track_rows = np.flatnonzero(track_ids == track_id)
         timepoints = df_t_np[track_rows]
         # Get the shift
         shift = rng.integers(-timepoints.size, timepoints.size)

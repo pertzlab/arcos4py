@@ -1,5 +1,23 @@
 # Changelog
 
+## [Unreleased]
+### Removed
+- Support for Python 3.10 (end of life October 2026); arcos4py now requires Python 3.11 or newer.
+
+### Changed
+- `shuffle_tracks`: `positoin_column` is renamed to `position_columns`; the old name still works but is
+  deprecated.
+
+### Fixed
+- `binData` (and `ARCOS.bin_measurements`) and the resampling functions no longer fail under pandas 3
+  ("assignment destination is read-only").
+- `shift_timepoints_per_trajectory` now actually shifts the timepoints.
+- `shuffle_tracks` and `resample_data` no longer sort or drop rows of the caller's DataFrame;
+  `resample_data` checks every relevant column for NaN.
+- `filterCollev.filter` no longer emits deprecation warnings from its own internals.
+- Warning messages no longer contain stray runs of spaces or a literal "25%%".
+- Docs build: `pymdown-extensions` pinned below 12 (incompatible with mkdocstrings).
+
 ## [0.3.3] - 2025-09-23
 ### Added
 - Added ability to use a global linker

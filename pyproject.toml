@@ -10,12 +10,11 @@ authors = [
 classifiers     = [
     "License :: OSI Approved :: MIT License",
     "Natural Language :: English",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 urls            = { Homepage = "https://github.com/pertzlab/arcos4py" }
 
 dependencies = [
@@ -72,7 +71,7 @@ packages = [
 [tool.black]
 line-length = 120
 skip-string-normalization = true
-target-version = ['py310', 'py311', 'py312', 'py313']
+target-version = ['py311', 'py312', 'py313']
 include = '\.pyi?$'
 exclude = '''
 /(

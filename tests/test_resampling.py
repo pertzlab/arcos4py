@@ -277,6 +277,14 @@ def test_resample_data_does_not_modify_input():
     before = data.copy()
     with pytest.warns(UserWarning, match=r"NaN values in \['x'\]"):
         resample_data(
-            data, ['x', 'y'], 'time', 'track_id', n=2, allow_duplicates=True, show_progress=False, parallel_processing=False, verbose=False
+            data,
+            ['x', 'y'],
+            'time',
+            'track_id',
+            n=2,
+            allow_duplicates=True,
+            show_progress=False,
+            parallel_processing=False,
+            verbose=False,
         )
     pd.testing.assert_frame_equal(data, before)
