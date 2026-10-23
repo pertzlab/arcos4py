@@ -44,7 +44,7 @@ def _get_xy_change(X: np.ndarray, object_ids: np.ndarray) -> tuple[pd.DataFrame,
 def shuffle_tracks(
     df: pd.DataFrame,
     object_id_column: str = 'track_id',
-    position_columns: list = ['x', 'y'],
+    position_columns: list | None = None,
     frame_column='t',
     seed=42,
     **kwargs,
@@ -55,7 +55,7 @@ def shuffle_tracks(
     Arguments:
         df (pd.DataFrame): The dataframe containing the data to be resampled.
         object_id_column (str): The column name of the object ID.
-        position_columns (list): The column names of the positions.
+        position_columns (list | None): The column names of the positions. Default ['x', 'y'].
         frame_column (str): The column name of the frame.
         seed (int): The random seed.
         **kwargs (Any): Additional keyword arguments. Includes deprecated parameters.
@@ -67,10 +67,10 @@ def shuffle_tracks(
     map_deprecated_params = {"positoin_column": "position_columns"}
     for key in kwargs:
         if key not in map_deprecated_params:
-            raise TypeError(f"shuffle_tracks() got an unexpected keyword argument '{key}'")
-    position_columns = handle_deprecated_params(map_deprecated_params, **kwargs).get(
-        "position_columns", position_columns
-    )
+            raise ValueError(f"Got an unexpected keyword argument '{key}'")
+    if position_columns is not None:
+        kwargs["position_columns"] = position_columns  # lets the helper warn when both names are given
+    position_columns = handle_deprecated_params(map_deprecated_params, **kwargs).get("position_columns", ['x', 'y'])
 
     df = df.sort_values([object_id_column, frame_column])  # sorted for _get_xy_change; the input is not modified
     df_pos_cols_np = df[position_columns].to_numpy(copy=True)
@@ -426,14 +426,14 @@ def resample_data(  # noqa: C901
     # check if there are any Nan in the columns selected
     na_cols = []
     for i in relevant_columns:
-        if data[position_columns].isnull().values.any():
+        if data[i].isnull().values.any():
             na_cols.append(i)
     if na_cols:
         warnings.warn(f'NaN values in {na_cols}, default behaviour is to drop these rows')
-        data.dropna(subset=na_cols, inplace=True)
+        data = data.dropna(subset=na_cols)  # not in place: the caller's DataFrame is left unchanged
 
     # Sort the data
-    data.sort_values([obj_id_column, frame_column], inplace=True)
+    data = data.sort_values([obj_id_column, frame_column])
 
     rng = np.random.default_rng(seed)
     # create a list of random numbers between 0 and 1000000
