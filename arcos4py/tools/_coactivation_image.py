@@ -87,6 +87,7 @@ def detect_coactivation_events_image(
     n_null: int = 8,
     seed: int = 0,
     return_report: bool = False,
+    smooth_k: int = 3,
 ):
     """Detect collective events in an image stack directly from the continuous signal.
 
@@ -99,7 +100,7 @@ def detect_coactivation_events_image(
         mask (np.ndarray | str | None): bool (Y, X) foreground, "auto" (Otsu if the object clearly stands out),
             or None (everything).
         remove_population_trend, baseline_window, allow_merges, refine_start, prune_early, calibration, n_null,
-            seed: as in detect_coactivation_events.
+            seed, smooth_k: as in detect_coactivation_events.
         return_report (bool): also return a CoactivationReport (with the tile size used).
 
     Returns:
@@ -128,6 +129,7 @@ def detect_coactivation_events_image(
         refine_start=refine_start,
         prune_early=prune_early,
         calibration=calibration,
+        smooth_k=smooth_k,
     )
     best_lab, best_rep = None, None
     for tsz in sizes:

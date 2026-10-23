@@ -154,7 +154,9 @@ def _rolling_line(R, use, W, min_frac=0.2):
     return np.nan_to_num(interp_columns(base, inside_only=False), nan=0.0)
 
 
-def masked_baseline_activity(S, observed, population=True, window=None, window_mult=5, n_iter=3, z_hi=3.0, z_lo=1.0):
+def masked_baseline_activity(
+    S, observed, population=True, window=None, window_mult=5, n_iter=3, z_hi=3.0, z_lo=1.0, smooth=3
+):
     """Activity dR (T, n) with a resting-frame baseline (see module docstring).
 
     Arguments:
@@ -163,12 +165,13 @@ def masked_baseline_activity(S, observed, population=True, window=None, window_m
         population (bool): remove the drift shared by all units.
         window (int | None): window of the local baseline in frames; None = window_mult x the 95th
             percentile of activation lengths (at least 51 frames, at most the movie).
+        smooth (int): frames of the centred running mean applied to the signal first (1 = none).
 
     Returns:
         tuple: dR (NaN outside lifetimes) and a dict with the baseline window and masked fraction.
     """
     T, n = observed.shape
-    X = smoothed(S, observed, 3)
+    X = smoothed(S, observed, smooth)
     life = np.isfinite(X)
     W0 = int(min(T, max(51, T // 4)))
     base0 = _rolling_line(X, life, W0)

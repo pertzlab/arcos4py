@@ -7,7 +7,7 @@ events one is willing to expect per movie.
 
 Steps:
 
-1. Activity dR per unit and frame: 3-frame mean minus a resting-frame baseline (shared drift such as
+1. Activity dR per unit and frame: smooth_k-frame mean (default 3) minus a resting-frame baseline (shared drift such as
    bleaching, plus each unit's own slow drift; see _coactivation_baseline).
 2. Co-activation score L = min(own dR, mean dR of the unit's neighbours in that frame). High only if the
    unit and its neighbourhood are raised together.
@@ -23,7 +23,7 @@ Steps:
 7. Membership: full width at half maximum of each event (per-event threshold, per-cell runs).
 8. Births: inside every event, units are tracked frame by frame (ARCOS-style); activations that started
    separately and are large enough to be more than chance stay separate events.
-9. Start of membership read on the unsmoothed dR (the 3-frame smoothing delays sharp rises).
+9. Start of membership read on the unsmoothed dR (the smoothing delays sharp rises).
 10. Early outliers removed: a member that started more than k frames before every neighbouring member of
     its event (k: the lag at which neighbour pairs are still >= 2.5x as common as by chance) is most often a
     pulse of its own that happened to touch the wave.
@@ -442,6 +442,7 @@ class CoactivationCalibration:
         null_cellframes (dict): unit-frames behind the pooled null sizes, per level.
         epsilon (float): expected false events per movie.
         level_mode (str): "quantile" (each movie gets its level from its own null quantile) or "absolute".
+        smooth_k (int): temporal smoothing window the calibration was made with (detection must use the same).
     """
 
     q: float
@@ -454,6 +455,7 @@ class CoactivationCalibration:
     null_cellframes: dict
     epsilon: float = 1.0
     level_mode: str = "quantile"
+    smooth_k: int = 3
     _cache: list | None = field(default=None, repr=False)
     _cache_key: int | None = field(default=None, repr=False)
 
@@ -513,12 +515,15 @@ def _prepare(
     calibration,
     level_quantiles,
     core_ladder,
+    smooth_k,
 ):
     rng = np.random.default_rng(seed)
     with warnings.catch_warnings():  # units without resting frames give all-NaN medians; they are handled
         warnings.filterwarnings("ignore", "All-NaN slice encountered", RuntimeWarning)
         warnings.filterwarnings("ignore", "Mean of empty slice", RuntimeWarning)
-        D, binfo = masked_baseline_activity(S, observed, population=remove_population_trend, window=baseline_window)
+        D, binfo = masked_baseline_activity(
+            S, observed, population=remove_population_trend, window=baseline_window, smooth=smooth_k
+        )
     cap = np.nanquantile(D[observed], 0.99)
     L = local_score(D, observed, graph, cap)
     nulls = []
@@ -701,12 +706,20 @@ def detect_matrix(
     core_ladder=CORE_LADDER,
     fixed_deltas=None,
     return_calibration_data=False,
+    smooth_k=3,
 ):
     """Co-activation events on a (T, n) signal matrix with its neighbour graph. Returns (labels (T, n), report)."""
     T, n = observed.shape
     _check_epsilon(epsilon)
     if int(n_null) < 1:
         raise ValueError(f"n_null must be >= 1, got {n_null}")
+    if int(smooth_k) != smooth_k or smooth_k < 1 or smooth_k % 2 == 0:
+        raise ValueError(f"smooth_k must be an odd number of frames >= 1 (1 = no smoothing), got {smooth_k}")
+    smooth_k = int(smooth_k)
+    if calibration is not None and calibration.smooth_k != smooth_k:
+        raise ValueError(
+            f"The calibration was made with smooth_k={calibration.smooth_k}; detect with the same smooth_k"
+        )
     if calibration is not None:  # the null-copy cache belongs to one movie; never reuse it across calls
         calibration._cache, calibration._cache_key = None, None
     mv, level_list, core_ladder, binfo = _prepare(
@@ -721,9 +734,10 @@ def detect_matrix(
         calibration,
         level_quantiles,
         core_ladder,
+        smooth_k,
     )
     best, table, lvl = _select_level(mv, level_list, core_ladder, len(level_quantiles) * len(core_ladder), fixed_deltas)
-    report = CoactivationReport(table=pd.DataFrame(table), baseline_window=binfo["window"])
+    report = CoactivationReport(table=pd.DataFrame(table), baseline_window=binfo["window"], smooth_k=smooth_k)
     report.calibration_data = mv.calib_data if return_calibration_data else None
     if best is None:
         return np.zeros((T, n), np.int32), report
@@ -752,7 +766,7 @@ def detect_matrix(
     if allow_merges:
         lab, lineage = apply_merges(lab, event_contacts(lab, group, eu, ev, n))
     if refine_start and lab.max() > 0:
-        lab = refine_starts(lab, mv.D, mv.D + (smoothed(S, observed, 1) - smoothed(S, observed, 3)), observed)
+        lab = refine_starts(lab, mv.D, mv.D + (smoothed(S, observed, 1) - smoothed(S, observed, smooth_k)), observed)
     prune_k = _prune_window(mv, lvl, q, delta) if prune_early else None
     if prune_k is not None:
         lab = prune_early_members(lab, graph, prune_k)
@@ -781,6 +795,7 @@ class CoactivationReport:
         seed_size (int): minimum co-active patch that can start a new event.
         prune_window (int | None): k for removing early members (None: not applied).
         baseline_window (int): window of the local baseline (frames).
+        smooth_k (int): temporal smoothing window of the signal (frames).
         n_events (int): number of events.
         table (pd.DataFrame): every level and core tried.
         contacts (pd.DataFrame): pairs of events that touch.
@@ -795,6 +810,7 @@ class CoactivationReport:
     seed_size: int = 0
     prune_window: int | None = None
     baseline_window: int = 0
+    smooth_k: int = 3
     n_events: int = 0
     table: pd.DataFrame = field(default_factory=pd.DataFrame, repr=False)
     contacts: pd.DataFrame = field(default_factory=pd.DataFrame, repr=False)
@@ -845,6 +861,7 @@ def detect_coactivation_events(
     n_null: int = 8,
     seed: int = 0,
     return_report: bool = False,
+    smooth_k: int = 3,
 ):
     """Detect collective events in tracked single-cell time series, directly from the continuous signal.
 
@@ -870,6 +887,9 @@ def detect_coactivation_events(
         n_null (int): number of time-shifted null copies. Default 8.
         seed (int): random seed of the null copies.
         return_report (bool): also return a CoactivationReport.
+        smooth_k (int): odd number of frames of the centred running mean applied to each trace before
+            everything else (1 = no smoothing). Larger values suppress more frame-to-frame noise but blur onsets;
+            refine_start reads the starts back on the unsmoothed signal. Default 3, as in binData.
 
     Returns:
         pd.DataFrame: the rows of X that belong to an event, with the event id in clid_column
@@ -892,6 +912,7 @@ def detect_coactivation_events(
         refine_start=refine_start,
         prune_early=prune_early,
         calibration=calibration,
+        smooth_k=smooth_k,
     )
     res = X.copy()
     res[clid_column] = lab[rows].astype(np.int64)
@@ -910,6 +931,7 @@ def calibrate_coactivation(
     seed: int = 0,
     level_mode: str = "quantile",
     remove_population_trend: bool = True,
+    smooth_k: int = 3,
 ):
     """One event definition for several movies (replicates, conditions, or a pilot for online use).
 
@@ -921,6 +943,7 @@ def calibrate_coactivation(
         movies (list): DataFrames with the same columns.
         level_mode (str): "quantile" (each movie gets its level from its own null quantile; robust to exposure
             changes) or "absolute" (the calibration's levels in signal units).
+        smooth_k (int): temporal smoothing window, as in detect_coactivation_events (stored in the calibration).
 
     Returns:
         CoactivationCalibration: pass it to detect_coactivation_events(..., calibration=...).
@@ -929,14 +952,18 @@ def calibrate_coactivation(
     for df in movies:
         S, observed, pos_t, _ = _to_matrix(df, position_columns, frame_column, obj_id_column, measurement_column)
         mats.append((S, observed, CellGraph(pos_t, observed)))
-    return _calibrate(mats, epsilon, n_null, seed, level_mode, remove_population_trend)
+    return _calibrate(mats, epsilon, n_null, seed, level_mode, remove_population_trend, smooth_k)
 
 
-def _calibrate(mats, epsilon, n_null, seed, level_mode, remove_population_trend):
+def _calibrate(mats, epsilon, n_null, seed, level_mode, remove_population_trend, smooth_k=3):
     if not mats:
         raise ValueError("calibrate_coactivation needs at least one movie")
     kw = dict(
-        epsilon=epsilon, n_null=n_null, remove_population_trend=remove_population_trend, return_calibration_data=True
+        epsilon=epsilon,
+        n_null=n_null,
+        remove_population_trend=remove_population_trend,
+        return_calibration_data=True,
+        smooth_k=smooth_k,
     )
     lag = {}
     for i, (S, observed, graph) in enumerate(mats):
@@ -988,6 +1015,7 @@ def _calibrate(mats, epsilon, n_null, seed, level_mode, remove_population_trend)
         null_cellframes=null_cf,
         epsilon=epsilon,
         level_mode=level_mode,
+        smooth_k=int(smooth_k),
     )
     n_tests = len(deltas) * len(CORE_LADDER)
     best = None

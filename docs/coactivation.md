@@ -63,9 +63,12 @@ onset window, minimum event size, baseline window, which events touch, merges).
 
 ## How it works
 
-1. **Activity.** For every cell, dR = 3-frame mean of the signal minus a baseline estimated only from frames
-   where the cell is at rest: drift shared by all cells (bleaching, focus; each cell with its own scale) plus
-   the cell's own slow drift (a robust local line). A pulse of the whole field is kept, not taken for drift.
+1. **Activity.** For every cell, dR = running mean of the signal over `smooth_k` frames (default 3, as in
+   `binData`; 1 = no smoothing) minus a baseline estimated only from frames where the cell is at rest: drift
+   shared by all cells (bleaching, focus; each cell with its own scale) plus the cell's own slow drift (a robust
+   local line). A pulse of the whole field is kept, not taken for drift. Because the null copies are shifts of the
+   smoothed signal, the thresholds account for the smoothing; a larger `smooth_k` suits fast imaging or noisy
+   reporters, at the cost of blurrier onsets (`refine_start` reads the starts back on the unsmoothed signal).
 2. **Co-activation score.** L = min(own dR, mean dR of the cell's neighbours in that frame): high only if a cell
    and its neighbourhood rise together.
 3. **Null.** Every cell's dR is circularly shifted in time by its own random offset. Each cell keeps its pulses

@@ -361,3 +361,25 @@ def test_no_all_nan_warnings(sheet):
     with warnings.catch_warnings():
         warnings.filterwarnings("error", "All-NaN slice", RuntimeWarning)
         detect_coactivation_events(sub, POS, "t", "id", "m")
+
+
+def test_smooth_k(sheet):
+    df, _ = sheet
+    base, rep3 = detect_coactivation_events(df, POS, "t", "id", "m", return_report=True)
+    assert rep3.smooth_k == 3
+    for k in (1, 5):
+        out, rep = detect_coactivation_events(df, POS, "t", "id", "m", smooth_k=k, return_report=True)
+        assert rep.smooth_k == k and out.collid.nunique() >= 2  # both waves still found
+    for bad in (0, 2, 2.5):
+        with pytest.raises(ValueError, match="smooth_k"):
+            detect_coactivation_events(df, POS, "t", "id", "m", smooth_k=bad)
+
+
+def test_calibration_remembers_smooth_k():
+    movies = [simulate_sheet(seed=s)[0] for s in (10, 11)]
+    calib = calibrate_coactivation(movies, POS, "t", "id", "m", n_null=4, smooth_k=5)
+    assert calib.smooth_k == 5
+    df, _ = simulate_sheet(seed=12)
+    detect_coactivation_events(df, POS, "t", "id", "m", calibration=calib, smooth_k=5)
+    with pytest.raises(ValueError, match="smooth_k=5"):
+        detect_coactivation_events(df, POS, "t", "id", "m", calibration=calib)
