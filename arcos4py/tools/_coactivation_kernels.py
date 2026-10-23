@@ -76,8 +76,11 @@ def _first_at_least(arr, lo, hi, value):
 
 @njit(cache=True)
 def _pulse_pairs(cells, times, cell_ptr, sorted_times, sorted_pid, indptr, indices, max_lag, mode, rows, cols, hist):
-    """Shared traversal: pulse p, each graph neighbour j of its cell in the frame of its time, every pulse q
-    of j with time in [t_p, t_p + max_lag]. mode 0: count pairs; 1: fill rows/cols; 2: histogram of lags."""
+    """Shared traversal over linked pulse pairs.
+
+    Pulse p, each graph neighbour j of its cell in the frame of its time, every pulse q of j with time in
+    [t_p, t_p + max_lag]. mode 0: count pairs; 1: fill rows/cols; 2: histogram of lags.
+    """
     n_frames = indptr.shape[0]
     n_pairs = 0
     for p in range(cells.size):
@@ -133,8 +136,10 @@ def lag_histogram(cells, times, n_cells, indptr, indices, max_lag):
 # ----------------------------------------------------------------------------- membership
 @njit(cache=True)
 def halfmax_extend(out, lab, Dz, observed, th):
-    """Run extension of half-maximum membership: a member keeps its event id forwards and backwards in
-    time while its dR stays above the event's threshold (in place on `out`)."""
+    """Run extension of half-maximum membership (in place on `out`).
+
+    A member keeps its event id forwards and backwards in time while its dR stays above the event's threshold.
+    """
     T, n = out.shape
     for t in range(1, T):
         for c in range(n):
@@ -153,7 +158,8 @@ def halfmax_extend(out, lab, Dz, observed, th):
 def refine_starts(out, item_e, item_c, item_s0, item_th, D_raw, observed, reach):
     """Start of each (event, cell) membership read on the unsmoothed dR (see raw_start), in place on `out`.
 
-    Items are processed in (event, cell) order; each moves only the start of the cell's first run."""
+    Items are processed in (event, cell) order; each moves only the start of the cell's first run.
+    """
     T = out.shape[0]
     for k in range(item_e.size):
         e, c, s0, th = item_e[k], item_c[k], item_s0[k], item_th[k]
@@ -178,10 +184,13 @@ def refine_starts(out, item_e, item_c, item_s0, item_th, D_raw, observed, reach)
 
 @njit(cache=True)
 def early_outliers(item_e, item_c, item_s0, start_of, indptr, indices, k):
-    """For each (event, cell) item: True if the cell started more than k frames before every neighbouring
-    member of the same event (neighbours from the graph of its start frame), or has no neighbouring member.
+    """For each (event, cell) item: True if the cell is an early outlier of its event.
 
-    start_of: (n_events + 1, n) start frame of each event's members (-1 if not a member)."""
+    An outlier started more than k frames before every neighbouring member of the same event (neighbours from
+    the graph of its start frame), or has no neighbouring member.
+
+    start_of: (n_events + 1, n) start frame of each event's members (-1 if not a member).
+    """
     n_frames = indptr.shape[0]
     bad = np.zeros(item_e.size, np.bool_)
     for i in range(item_e.size):
@@ -203,7 +212,8 @@ def rolling_median_centered(X, W):
     """Centred running median over W frames per column, NaNs ignored, NaN where a window has no values.
 
     Same windows as pandas .rolling(W, center=True, min_periods=1).median(): the window of frame i covers
-    frames [i + (W - 1) // 2 - W + 1, i + (W - 1) // 2], clipped to the movie."""
+    frames [i + (W - 1) // 2 - W + 1, i + (W - 1) // 2], clipped to the movie.
+    """
     T, n = X.shape
     out = np.full((T, n), np.nan)
     off = (W - 1) // 2
@@ -253,8 +263,10 @@ def _find(parent, a):
 
 @njit(cache=True)
 def frame_cluster_sizes(active, indptr, indices):
-    """Sizes of the connected clusters of active units in every frame (graph of that frame), all frames
-    concatenated (order of sizes is arbitrary)."""
+    """Sizes of the connected clusters of active units in every frame (graph of that frame).
+
+    All frames are concatenated; the order of sizes is arbitrary.
+    """
     T, n = active.shape
     n_frames = indptr.shape[0]
     parent = np.arange(n)
@@ -397,7 +409,8 @@ def track_seeded(mask, seedable, observed, indptr, indices, seed_size, n_prev, l
     lies within link_hops hops of a unit labelled in the last n_prev frames; each unit of a linked cluster takes
     the most common label among the labelled units of the first ring around it that holds any (ties: smallest
     label). An unlinked cluster starts a new label only if it holds >= seed_size seedable unit-frames; new
-    labels follow the clusters' smallest unit index."""
+    labels follow the clusters' smallest unit index.
+    """
     T, n = mask.shape
     n_frames = indptr.shape[0]
     out = np.zeros((T, n), np.int32)

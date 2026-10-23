@@ -33,9 +33,11 @@ def pulses_from_binary(B):
 
 
 def interp_columns(X, inside_only):
-    """Linear interpolation of NaNs along time, column by column, exactly as pandas .interpolate() (np.interp
-    on frame positions): inside_only fills only gaps between the first and last value of a column
-    (limit_area="inside"); otherwise every NaN is filled, holding the edge values (limit_direction="both")."""
+    """Linear interpolation of NaNs along time, column by column, exactly as pandas .interpolate().
+
+    np.interp on frame positions: inside_only fills only gaps between the first and last value of a column
+    (limit_area="inside"); otherwise every NaN is filled, holding the edge values (limit_direction="both").
+    """
     X = np.array(X, dtype=np.float64, copy=True)
     nan = np.isnan(X)
     idx = np.arange(X.shape[0])
@@ -124,9 +126,11 @@ def _population_drift(X, use, observed, min_rest=0.05, n_inner=3):
 
 
 def _rolling_line(R, use, W, min_frac=0.2):
-    """Per unit, robust local line through the frames in `use` in a centred window of W frames: level from
-    their running median, slope from least squares (removes the lag of a plain running median at the movie
-    edges and next to long activations). Windows with too few usable frames are interpolated."""
+    """Per unit, robust local line through the frames in `use` in a centred window of W frames.
+
+    Level from their running median, slope from least squares (removes the lag of a plain running median at
+    the movie edges and next to long activations). Windows with too few usable frames are interpolated.
+    """
     T, n = R.shape
     w = use.astype(float)
     r = np.where(use, R, 0.0)
@@ -151,7 +155,7 @@ def _rolling_line(R, use, W, min_frac=0.2):
 
 
 def masked_baseline_activity(S, observed, population=True, window=None, window_mult=5, n_iter=3, z_hi=3.0, z_lo=1.0):
-    """dR (T, n) with a resting-frame baseline (see module docstring).
+    """Activity dR (T, n) with a resting-frame baseline (see module docstring).
 
     Arguments:
         S (np.ndarray): (T, n) signal, NaN where a unit is absent.

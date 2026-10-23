@@ -63,9 +63,11 @@ def null_threshold(null_sizes, n_null, n_tests, epsilon):
 
 
 def null_threshold_tail(null_sizes, n_null, n_tests, epsilon):
-    """As null_threshold, with the upper tail of the null sizes extrapolated by an exponential fit to the
-    largest 5 % (at least 10) groups, so that epsilon / n_tests can be resolved with few null copies; never
-    below the empirical rule."""
+    """As null_threshold, with the upper tail of the null sizes extrapolated.
+
+    The tail is an exponential fit to the largest 5 % (at least 10) groups, so that epsilon / n_tests can be
+    resolved with few null copies; never below the empirical rule.
+    """
     emp = null_threshold(null_sizes, n_null, n_tests, epsilon)
     if null_sizes.size < 10 or epsilon * n_null / n_tests >= 1:
         return emp
@@ -131,9 +133,12 @@ def _pulse_graph(cells, times, graph, delta):
 
 
 def _pulse_components(cells, times, graph, delta, m=0):
-    """Group per pulse (-1 = none). m = 0: connected components of the pulse graph. m >= 1: DBSCAN-style,
-    a pulse is core if linked to >= m others; cores connect through core-core links, a non-core pulse linked
-    to a core joins it, other pulses are in no group."""
+    """Group per pulse (-1 = none).
+
+    m = 0: connected components of the pulse graph. m >= 1: DBSCAN-style, a pulse is core if linked to >= m
+    others; cores connect through core-core links, a non-core pulse linked to a core joins it, other pulses
+    are in no group.
+    """
     G = _pulse_graph(cells, times, graph, delta)
     if m <= 0:
         return csgraph.connected_components(G, directed=False)[1]
@@ -199,16 +204,21 @@ def _null_seed_size(graph, null_L, observed, h, epsilon):
 
 
 def _track_seeded(graph, binary, seedable, seed_size):
-    """Frame-by-frame tracking (link to labelled units within 2*LINK_K+1 hops of the last N_PREV frames);
-    an unlinked cluster starts a new birth only if it holds >= seed_size seedable (co-active) unit-frames."""
+    """Frame-by-frame tracking (link to labelled units within 2*LINK_K+1 hops of the last N_PREV frames).
+
+    An unlinked cluster starts a new birth only if it holds >= seed_size seedable (co-active) unit-frames.
+    """
     return K.track_seeded(
         binary, seedable, graph.observed, graph.indptr, graph.indices, seed_size, N_PREV, 2 * LINK_K + 1
     )
 
 
 def _join_simultaneous_births(sub, flat, e, eu, ev, n, delta):
-    """Births of event e that start within delta frames of each other and touch within delta frames of the
-    later start are one start (patches of one front, or a pulse of the whole field)."""
+    """Join births of event e that start and touch close together in time.
+
+    Births that start within delta frames of each other and touch within delta frames of the later start are
+    one start (patches of one front, or a pulse of the whole field).
+    """
     T = sub.shape[0]
     nb = int(sub.max()) + 1
     start = np.full(nb, T)
@@ -234,8 +244,10 @@ def _join_simultaneous_births(sub, flat, e, eu, ev, n, delta):
 
 
 def separate_births(lab, graph, eu, ev, seedable, min_cells, delta):
-    """Inside every event, activations that started separately and reach >= min_cells units stay separate
-    events; smaller births and unlinked unit-frames join the nearest large birth (space-time distance)."""
+    """Inside every event, activations that started separately and reach >= min_cells units stay separate.
+
+    Smaller births and unlinked unit-frames join the nearest large birth (space-time distance).
+    """
     T, n = lab.shape
     out = lab.copy()
     next_id = int(lab.max()) + 1
@@ -276,8 +288,11 @@ def separate_births(lab, graph, eu, ev, seedable, min_cells, delta):
 
 
 def event_contacts(lab, group, eu, ev, n):
-    """Pairs of events that touch: first contact frame, number of contacts, and whether both came out of one
-    onset group (two separately started waves that collided = a merge)."""
+    """Pairs of events that touch.
+
+    Columns: first contact frame, number of contacts, and whether both came out of one onset group (two
+    separately started waves that collided = a merge).
+    """
     o, g = lab.ravel(), group.ravel()
     a, b = o[eu], o[ev]
     m = (a > 0) & (b > 0) & (a != b)
@@ -297,8 +312,10 @@ def event_contacts(lab, group, eu, ev, n):
 
 
 def apply_merges(lab, contacts):
-    """Two events that came out of one onset group continue as one new event from their first contact on;
-    returns the labels and a lineage table (event, parent_a, parent_b, frame)."""
+    """Two events that came out of one onset group continue as one new event from their first contact on.
+
+    Returns the labels and a lineage table (event, parent_a, parent_b, frame).
+    """
     lab = lab.copy()
     next_id = int(lab.max()) + 1
     rows = []
@@ -323,8 +340,11 @@ def apply_merges(lab, contacts):
 
 # ============================================================================ membership refinements
 def halfmax_members(lab, D, observed, frac=MEMBERSHIP_FRAC):
-    """Full width at half maximum: per event, theta = frac x the 95th percentile of dR over its unit-frames;
-    unit-frames below theta leave the event and every member keeps the event id along its run above theta."""
+    """Full width at half maximum membership.
+
+    Per event, theta = frac x the 95th percentile of dR over its unit-frames; unit-frames below theta leave
+    the event and every member keeps the event id along its run above theta.
+    """
     ne = int(lab.max())
     if ne == 0:
         return lab
@@ -360,8 +380,11 @@ def _member_items(lab, values=None):
 
 
 def refine_starts(lab, D, D_raw, observed, frac=MEMBERSHIP_FRAC, reach=2):
-    """Each member's first frame read on the unsmoothed dR: within +-reach frames of its current start, the
-    first frame where the unsmoothed dR reaches frac x the member's own peak (smoothed) dR."""
+    """Each member's first frame read on the unsmoothed dR.
+
+    Within +-reach frames of its current start, the first frame where the unsmoothed dR reaches frac x the
+    member's own peak (smoothed) dR.
+    """
     if lab.max() == 0:
         return lab
     ie, ic, s0, pk = _member_items(lab, D)
@@ -378,8 +401,10 @@ def refine_starts(lab, D, D_raw, observed, frac=MEMBERSHIP_FRAC, reach=2):
 
 
 def prune_early_members(lab, graph, k):
-    """Remove each member that started more than k frames before every neighbouring member of its event (or
-    has no neighbouring member)."""
+    """Remove each member that started more than k frames before every neighbouring member of its event.
+
+    Members without any neighbouring member are removed as well.
+    """
     if lab.max() == 0:
         return lab
     ie, ic, s0, _ = _member_items(lab)
@@ -448,6 +473,7 @@ class CoactivationCalibration:
         return self._cache
 
     def level_for(self, q, D, observed, graph, cap, rng):
+        """Co-activation level for quantile q in this movie's signal units."""
         if self.level_mode == "absolute":
             return float(self.levels[q])
         v = np.concatenate([Ln[observed] for _, Ln in self.own_null(D, observed, graph, cap, rng)])
@@ -511,8 +537,10 @@ def _prepare(
 
 
 def _evaluate_calibrated(mv, q, h, cells, on):
-    """Groups at level q with the calibration's window, core and size threshold (never below this movie's own
-    largest chance group)."""
+    """Groups at level q with the calibration's window, core and size threshold.
+
+    The threshold is never below this movie's own largest chance group.
+    """
     c = mv.calibration
     delta, m = int(c.deltas[q]), c.m
     comp = _pulse_components(cells, on, mv.graph, delta, m)
@@ -602,8 +630,10 @@ def _select_level(mv, level_list, core_ladder, n_tests, fixed_deltas):
 
 
 def _grow(mv, lvl, q, m, ev_of):
-    """Events grown into the onset-linked co-active pulses of the lowest level (hysteresis); groups there that
-    touch no event become events if they pass that level's own test."""
+    """Events grown into the onset-linked co-active pulses of the lowest level (hysteresis).
+
+    Groups there that touch no event become events if they pass that level's own test.
+    """
     T, n = mv.observed.shape
     hi, lo = lvl[q], lvl[min(lvl)]
     pid = np.full((T, n), -1)
@@ -668,6 +698,9 @@ def detect_matrix(
 ):
     """Co-activation events on a (T, n) signal matrix with its neighbour graph. Returns (labels (T, n), report)."""
     T, n = observed.shape
+    _check_epsilon(epsilon)
+    if calibration is not None:  # the null-copy cache belongs to one movie; never reuse it across calls
+        calibration._cache, calibration._cache_key = None, None
     mv, level_list, core_ladder, binfo = _prepare(
         S,
         observed,
@@ -722,6 +755,8 @@ def detect_matrix(
     report.n_events = int(lab.max())
     report.contacts = event_contacts(lab, group, eu, ev, n)
     report.lineage = _relabel_lineage(lineage, u)
+    if calibration is not None:
+        calibration._cache, calibration._cache_key = None, None
     return lab, report
 
 
@@ -760,7 +795,14 @@ class CoactivationReport:
 
 
 # ============================================================================ public API (tracked cells)
+def _check_epsilon(epsilon):
+    if not epsilon > 0:
+        raise ValueError(f"epsilon must be > 0 (expected false events per movie), got {epsilon}")
+
+
 def _to_matrix(df, position_columns, frame_column, obj_id_column, measurement_column):
+    if df.duplicated([frame_column, obj_id_column]).any():
+        raise ValueError(f"Duplicate rows for the same {frame_column} and {obj_id_column}")
     frames = np.sort(df[frame_column].unique())
     ids = np.sort(df[obj_id_column].unique())
     rows = (np.searchsorted(frames, df[frame_column].to_numpy()), np.searchsorted(ids, df[obj_id_column].to_numpy()))

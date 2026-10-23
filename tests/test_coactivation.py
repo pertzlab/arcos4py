@@ -281,3 +281,32 @@ def test_cellgraph_neighbours_are_local(sheet):
     A = g.A_t[0].tocoo()
     dist = np.hypot(*(pos[0, A.row] - pos[0, A.col]).T)
     assert dist.max() < 25  # lattice spacing 10: no long Delaunay edges across the sheet
+
+
+def test_cellgraph_3d_keeps_every_simplex_edge():
+    rng = np.random.default_rng(15)
+    zz, yy, xx = np.mgrid[0:6, 0:6, 0:6]
+    pos = np.c_[xx.ravel(), yy.ravel(), zz.ravel()] * 10.0 + rng.normal(0, 1.0, (216, 3))
+    g = CellGraph(pos[None], np.ones((1, 216), bool))
+    A = g.A_t[0].tocsr()
+    d = np.linalg.norm(pos[:, None] - pos[None], axis=2)
+    np.fill_diagonal(d, np.inf)
+    nearest = d.argmin(1)  # the nearest neighbour is always a (short) Delaunay edge
+    assert all(A[i, nearest[i]] for i in range(216))
+
+
+def test_invalid_input_raises(sheet):
+    df, _ = sheet
+    with pytest.raises(ValueError, match="epsilon"):
+        detect_coactivation_events(df, POS, "t", "id", "m", epsilon=0)
+    with pytest.raises(ValueError, match="Duplicate"):
+        detect_coactivation_events(pd.concat([df, df.iloc[:5]]), POS, "t", "id", "m")
+    with pytest.raises(ValueError, match="2 position columns"):
+        detect_coactivation_events(df, ["x"], "t", "id", "m")
+
+
+def test_calibration_does_not_keep_null_copies():
+    movies = [simulate_sheet(seed=s)[0] for s in (10, 11)]
+    calib = calibrate_coactivation(movies, POS, "t", "id", "m", n_null=4)
+    detect_coactivation_events(movies[0], POS, "t", "id", "m", calibration=calib)
+    assert calib._cache is None and calib._cache_key is None

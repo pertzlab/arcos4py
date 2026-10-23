@@ -9,6 +9,8 @@ the numba kernels.
 
 from __future__ import annotations
 
+from itertools import combinations
+
 import numpy as np
 from scipy import sparse
 from scipy.spatial import Delaunay
@@ -37,20 +39,27 @@ class _Graph:
 
 
 class CellGraph(_Graph):
-    """Tracked cells: one Delaunay graph per frame over the cells present, long edges pruned with one Tukey
-    fence (Q3 + 1.5 IQR of all edge lengths in the movie)."""
+    """Tracked cells: one Delaunay graph per frame over the cells present.
+
+    Long edges are pruned with one Tukey fence (Q3 + 1.5 IQR of all edge lengths in the movie).
+    """
 
     def __init__(self, pos_t, observed):
+        """Build the graphs from positions (T, n, d) and presence (T, n); d = 2 or 3."""
+        dim = pos_t.shape[-1]
+        if dim < 2:
+            raise ValueError("Co-activation detection needs at least 2 position columns")
         self.T, self.n = observed.shape
         self.observed = observed
+        pairs = list(combinations(range(dim + 1), 2))  # every edge of a simplex (triangle, tetrahedron)
         lengths, edges_t = [], []
         for t in range(self.T):
             idx = np.flatnonzero(observed[t])
-            if idx.size < 4:
+            if idx.size < dim + 2:
                 edges_t.append(np.zeros((0, 3)))
                 continue
             sm = Delaunay(pos_t[t, idx]).simplices
-            e = np.sort(np.vstack([sm[:, [0, 1]], sm[:, [1, 2]], sm[:, [0, 2]]]), axis=1).astype(np.int64)
+            e = np.sort(np.vstack([sm[:, list(p)] for p in pairs]), axis=1).astype(np.int64)
             key = np.unique(e[:, 0] * idx.size + e[:, 1])
             e = np.c_[key // idx.size, key % idx.size]
             L = np.linalg.norm(pos_t[t, idx[e[:, 0]]] - pos_t[t, idx[e[:, 1]]], axis=1)
@@ -76,6 +85,7 @@ class GridGraph(_Graph):
     """Fixed 8-neighbour grid of tiles (the same graph in every frame)."""
 
     def __init__(self, keep_yx, T):
+        """Build the grid from the (y, x) tile indices kept and the number of frames."""
         self.T, self.n = T, len(keep_yx)
         self.observed = np.ones((T, self.n), bool)
         index = {tuple(p): k for k, p in enumerate(map(tuple, keep_yx))}

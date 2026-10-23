@@ -19,8 +19,10 @@ def bin_stack(stack, b):
 
 
 def noise_scale(stack, max_d=12, frames=60, level=0.2):
-    """Distance (px) beyond which frame-to-frame changes are no longer correlated between pixels: the optical
-    blur for subcellular data, the object size when objects move as a whole."""
+    """Distance (px) beyond which frame-to-frame changes are no longer correlated between pixels.
+
+    This is the optical blur for subcellular data, the object size when objects move as a whole.
+    """
     T = stack.shape[0]
     idx = np.linspace(0, T - 2, min(T - 1, frames)).astype(int)
     d = stack[idx + 1].astype(np.float32) - stack[idx].astype(np.float32)
@@ -38,8 +40,10 @@ def noise_scale(stack, max_d=12, frames=60, level=0.2):
 
 
 def auto_mask(stack):
-    """Foreground by Otsu on the time-averaged image, only if it clearly stands out (at least twice as bright
-    as the background); otherwise everything."""
+    """Foreground by Otsu on the time-averaged image, only if it clearly stands out.
+
+    The foreground must be at least twice as bright as the background; otherwise everything is kept.
+    """
     from skimage.filters import threshold_otsu
 
     m = stack.mean(0)
