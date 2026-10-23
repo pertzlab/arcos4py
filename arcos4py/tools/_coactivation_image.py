@@ -93,9 +93,9 @@ def detect_coactivation_events_image(
     Arguments:
         stack (np.ndarray): (T, Y, X) raw signal.
         epsilon (float): number of false events one is willing to expect per movie. Default 1.
-        tile (int | str): tile size in pixels, or "auto": the distance beyond which frame-to-frame changes stop
-            being correlated; 1.5x and 2x that size are tried as well and the size with the most events is kept
-            (epsilon split over the sizes tried).
+        tile (int | str): tile size in pixels (1 = single pixels), or "auto": the distance beyond which
+            frame-to-frame changes stop being correlated (at least 2 px); 1.5x and 2x that size are tried as well
+            and the size with the most events is kept (epsilon split over the sizes tried).
         mask (np.ndarray | str | None): bool (Y, X) foreground, "auto" (Otsu if the object clearly stands out),
             or None (everything).
         remove_population_trend, baseline_window, allow_merges, refine_start, prune_early, calibration, n_null,
@@ -112,7 +112,12 @@ def detect_coactivation_events_image(
         mask = auto_mask(stack)
     elif mask is None:
         mask = np.ones(stack.shape[1:], bool)
-    t0 = max(2, noise_scale(stack) if tile == "auto" else int(tile))
+    if tile == "auto":
+        t0 = max(2, noise_scale(stack))
+    elif int(tile) >= 1:
+        t0 = int(tile)
+    else:
+        raise ValueError(f"tile must be 'auto' or a positive number of pixels, got {tile}")
     sizes = sorted({t0, int(round(1.5 * t0)), 2 * t0}) if tile == "auto" else [t0]
     kw = dict(
         n_null=n_null,

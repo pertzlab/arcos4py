@@ -13,7 +13,7 @@ from itertools import combinations
 
 import numpy as np
 from scipy import sparse
-from scipy.spatial import Delaunay
+from scipy.spatial import Delaunay, QhullError
 
 
 class _Graph:
@@ -38,6 +38,17 @@ class _Graph:
         self.indices = np.concatenate(chunks) if chunks else np.zeros(0, np.int64)
 
 
+def _simplices(pts):
+    """Delaunay simplices; degenerate frames (collinear, coplanar) are joggled, None if that fails too."""
+    try:
+        return Delaunay(pts).simplices
+    except QhullError:
+        try:
+            return Delaunay(pts, qhull_options="QJ").simplices
+        except QhullError:
+            return None
+
+
 class CellGraph(_Graph):
     """Tracked cells: one Delaunay graph per frame over the cells present.
 
@@ -58,7 +69,10 @@ class CellGraph(_Graph):
             if idx.size < dim + 2:
                 edges_t.append(np.zeros((0, 3)))
                 continue
-            sm = Delaunay(pos_t[t, idx]).simplices
+            sm = _simplices(pos_t[t, idx])
+            if sm is None:
+                edges_t.append(np.zeros((0, 3)))
+                continue
             e = np.sort(np.vstack([sm[:, list(p)] for p in pairs]), axis=1).astype(np.int64)
             key = np.unique(e[:, 0] * idx.size + e[:, 1])
             e = np.c_[key // idx.size, key % idx.size]

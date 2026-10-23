@@ -31,6 +31,7 @@ Steps:
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -438,7 +439,7 @@ class CoactivationCalibration:
         deltas (dict): onset window per level.
         strict_deltas (dict): window for removing early members, per level.
         null_sizes (dict): pooled null group sizes per (level, core).
-        null_cellframes (float): unit-frames behind the pooled null sizes.
+        null_cellframes (dict): unit-frames behind the pooled null sizes, per level.
         epsilon (float): expected false events per movie.
         level_mode (str): "quantile" (each movie gets its level from its own null quantile) or "absolute".
     """
@@ -450,7 +451,7 @@ class CoactivationCalibration:
     deltas: dict
     strict_deltas: dict
     null_sizes: dict
-    null_cellframes: float
+    null_cellframes: dict
     epsilon: float = 1.0
     level_mode: str = "quantile"
     _cache: list | None = field(default=None, repr=False)
@@ -458,7 +459,7 @@ class CoactivationCalibration:
 
     def threshold(self, q, m, n_cellframes, n_tests=1):
         """Smallest group size with fewer than epsilon chance groups expected in a movie of this size."""
-        n_eff = self.null_cellframes / max(n_cellframes, 1)
+        n_eff = self.null_cellframes[q] / max(n_cellframes, 1)
         return null_threshold_tail(np.asarray(self.null_sizes[(q, m)]), n_eff, n_tests, self.epsilon)
 
     def own_null(self, D, observed, graph, cap, rng, n_copies=2):
@@ -514,7 +515,10 @@ def _prepare(
     core_ladder,
 ):
     rng = np.random.default_rng(seed)
-    D, binfo = masked_baseline_activity(S, observed, population=remove_population_trend, window=baseline_window)
+    with warnings.catch_warnings():  # units without resting frames give all-NaN medians; they are handled
+        warnings.filterwarnings("ignore", "All-NaN slice encountered", RuntimeWarning)
+        warnings.filterwarnings("ignore", "Mean of empty slice", RuntimeWarning)
+        D, binfo = masked_baseline_activity(S, observed, population=remove_population_trend, window=baseline_window)
     cap = np.nanquantile(D[observed], 0.99)
     L = local_score(D, observed, graph, cap)
     nulls = []
@@ -608,6 +612,8 @@ def _select_level(mv, level_list, core_ladder, n_tests, fixed_deltas):
     """Evaluate every level (and core); keep the one with the most events (ties: most stringent)."""
     best, table, lvl = None, [], {}
     for q, h in level_list:
+        if fixed_deltas is not None and q not in fixed_deltas:
+            continue  # no onset window for this level (no pulses there in the calibration's first pass)
         C = mv.observed & (mv.L > h)
         cells, on_bin, off = pulses_from_binary(C)
         if cells.size == 0:
@@ -699,6 +705,8 @@ def detect_matrix(
     """Co-activation events on a (T, n) signal matrix with its neighbour graph. Returns (labels (T, n), report)."""
     T, n = observed.shape
     _check_epsilon(epsilon)
+    if int(n_null) < 1:
+        raise ValueError(f"n_null must be >= 1, got {n_null}")
     if calibration is not None:  # the null-copy cache belongs to one movie; never reuse it across calls
         calibration._cache, calibration._cache_key = None, None
     mv, level_list, core_ladder, binfo = _prepare(
@@ -804,6 +812,10 @@ def _to_matrix(df, position_columns, frame_column, obj_id_column, measurement_co
     if df.duplicated([frame_column, obj_id_column]).any():
         raise ValueError(f"Duplicate rows for the same {frame_column} and {obj_id_column}")
     frames = np.sort(df[frame_column].unique())
+    if np.issubdtype(frames.dtype, np.integer) and frames.size > 1:
+        # keep frames missing for every unit as empty rows, so that lags stay in frames (step: the common spacing)
+        step = int(np.gcd.reduce(np.diff(frames)))
+        frames = np.arange(frames[0], frames[-1] + 1, step, dtype=frames.dtype)
     ids = np.sort(df[obj_id_column].unique())
     rows = (np.searchsorted(frames, df[frame_column].to_numpy()), np.searchsorted(ids, df[obj_id_column].to_numpy()))
     T, n = frames.size, ids.size
@@ -921,6 +933,8 @@ def calibrate_coactivation(
 
 
 def _calibrate(mats, epsilon, n_null, seed, level_mode, remove_population_trend):
+    if not mats:
+        raise ValueError("calibrate_coactivation needs at least one movie")
     kw = dict(
         epsilon=epsilon, n_null=n_null, remove_population_trend=remove_population_trend, return_calibration_data=True
     )
@@ -939,20 +953,29 @@ def _calibrate(mats, epsilon, n_null, seed, level_mode, remove_population_trend)
         ok = (real >= 2 * mu) & (z > 3)
         deltas[q] = int(np.flatnonzero(ok).max()) if ok.any() else 0
         strict[q] = _strict_window(real, mu, z, STRICT_RATIO, deltas[q])
+    if not deltas:
+        raise ValueError("No co-active pulses in any calibration movie")
     pooled = {(q, m): [] for q in deltas for m in CORE_LADDER}
-    real = {(q, m): [] for q in deltas for m in CORE_LADDER}
+    real = {(q, m): [] for q in deltas for m in CORE_LADDER}  # (sizes, unit-frames) per movie with pulses at q
     levels = {q: [] for q in deltas}
-    n_obs, null_cf = [], 0.0
+    null_cf = {q: 0.0 for q in deltas}  # unit-frames behind the pooled null sizes, per level
     for i, (S, observed, graph) in enumerate(mats):
         _, rep = detect_matrix(S, observed, graph, seed=seed + 100 + i, fixed_deltas=deltas, **kw)
         cd = rep.calibration_data
-        n_obs.append(cd["n_obs"])
-        null_cf += cd["n_obs"] * cd["n_null"]
         for q, d in cd["levels"].items():
             levels[q].append(d["h"])
+            null_cf[q] += cd["n_obs"] * cd["n_null"]
             for m in CORE_LADDER:
                 pooled[(q, m)].append(d["null_sizes"][m])
-                real[(q, m)].append(d["sizes"][m])
+                real[(q, m)].append((d["sizes"][m], cd["n_obs"]))
+    # levels that found no pulses in the second pass cannot be calibrated
+    for q in [q for q, v in levels.items() if not v]:
+        for d_ in (deltas, strict, levels, null_cf):
+            del d_[q]
+        for m in CORE_LADDER:
+            del pooled[(q, m)], real[(q, m)]
+    if not deltas:
+        raise ValueError("No co-active pulses in any calibration movie")
     pooled = {k: np.concatenate(v) if v else np.zeros(0, int) for k, v in pooled.items()}
     calib = CoactivationCalibration(
         q=0,
@@ -968,9 +991,10 @@ def _calibrate(mats, epsilon, n_null, seed, level_mode, remove_population_trend)
     )
     n_tests = len(deltas) * len(CORE_LADDER)
     best = None
-    for (q, m), sizes_list in real.items():
-        n_ev = sum(int((sz >= calib.threshold(q, m, N, n_tests)).sum()) for sz, N in zip(sizes_list, n_obs))
+    for (q, m), items in real.items():
+        n_ev = sum(int((sz >= calib.threshold(q, m, N, n_tests)).sum()) for sz, N in items)
         if best is None or (n_ev, q, m) > best[0]:
             best = ((n_ev, q, m), q, m)
+    assert best is not None  # deltas is not empty
     calib.q, calib.m = best[1], best[2]
     return calib

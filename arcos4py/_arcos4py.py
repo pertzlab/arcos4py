@@ -425,13 +425,15 @@ class ARCOS:
         """
         if self.obj_id_column is None:
             raise ValueError("track_coactive_events needs tracked objects (obj_id_column)")
+        if self.measurement_column is None:
+            raise ValueError("track_coactive_events needs a measurement_column")
+        kwargs.setdefault("clid_column", self.clid_column)
         return detect_coactivation_events(
             X=self.data,
             position_columns=self.position_columns,
             frame_column=self.frame_column,
             obj_id_column=self.obj_id_column,
             measurement_column=self.measurement_column,
-            clid_column=self.clid_column,
             epsilon=epsilon,
             **kwargs,
         )

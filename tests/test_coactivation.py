@@ -310,3 +310,54 @@ def test_calibration_does_not_keep_null_copies():
     calib = calibrate_coactivation(movies, POS, "t", "id", "m", n_null=4)
     detect_coactivation_events(movies[0], POS, "t", "id", "m", calibration=calib)
     assert calib._cache is None and calib._cache_key is None
+
+
+def test_frame_missing_for_every_cell_keeps_timing(sheet):
+    df, _ = sheet
+    full = detect_coactivation_events(df, POS, "t", "id", "m")
+    gap = detect_coactivation_events(df[df.t != 50], POS, "t", "id", "m", return_report=True)[1]
+    assert gap.n_events >= 1
+    # frame values with a common spacing are not padded with empty frames
+    spaced = detect_coactivation_events(df.assign(t=df.t * 5), POS, "t", "id", "m")
+    assert len(spaced) == len(full)
+
+
+def test_collinear_cells_do_not_crash():
+    df, _ = simulate_sheet(seed=0, side=20, waves=((60.0, 0.0, 20),))
+    line = df[df.id < 20].assign(y=0.0)  # one row of cells, exactly collinear
+    out = detect_coactivation_events(line, POS, "t", "id", "m")
+    assert isinstance(out, pd.DataFrame)
+
+
+def test_more_invalid_input_raises(sheet):
+    df, _ = sheet
+    with pytest.raises(ValueError, match="n_null"):
+        detect_coactivation_events(df, POS, "t", "id", "m", n_null=0)
+    with pytest.raises(ValueError, match="at least one movie"):
+        calibrate_coactivation([], POS, "t", "id", "m")
+    with pytest.raises(ValueError, match="tile"):
+        detect_coactivation_events_image(np.ones((10, 8, 8)), tile=0)
+
+
+def test_calibration_with_a_quiet_movie():
+    movies = [simulate_sheet(seed=10)[0], simulate_sheet(seed=11, waves=(), spont=0.0)[0]]
+    calib = calibrate_coactivation(movies, POS, "t", "id", "m", n_null=4)
+    assert set(calib.null_cellframes) == set(calib.deltas)
+
+
+def test_arcos_class_method_clid_column_kwarg(sheet):
+    df, _ = sheet
+    ts = ARCOS(df, position_columns=POS, frame_column="t", obj_id_column="id", measurement_column="m")
+    out = ts.track_coactive_events(clid_column="ev")
+    assert "ev" in out.columns
+
+
+def test_no_all_nan_warnings(sheet):
+    import warnings
+
+    df, _ = sheet
+    sub = df.copy()
+    sub.loc[sub.id == 0, "m"] = 5.0  # one cell that is never at rest
+    with warnings.catch_warnings():
+        warnings.filterwarnings("error", "All-NaN slice", RuntimeWarning)
+        detect_coactivation_events(sub, POS, "t", "id", "m")
