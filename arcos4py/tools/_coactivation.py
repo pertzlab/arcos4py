@@ -215,12 +215,13 @@ def _track_seeded(graph, binary, seedable, seed_size):
     )
 
 
-def _merge_close_starts(sub, graph, hops):
-    """Births that appear in the same frame within `hops` neighbour steps of each other are one start.
+def _merge_close_starts(sub, graph, hops, delta):
+    """Births that start close together in space and time are one origin.
 
-    The tracker opens a birth per unlinked cluster; patches of one front (or of a whole-field pulse) that
-    appear together but do not quite touch are one origin. Returns the labels, merged births taking the
-    smallest label.
+    The tracker opens a birth per unlinked cluster. Birth B is part of an earlier (or simultaneous) birth A if it
+    starts at most delta frames after A, within `hops` neighbour steps of A's origin (its units in the frame it
+    started): patches of one front, or a front that grew faster than the tracker links, appear close to where it
+    started. Origins further apart, or starting later, stay separate. Merged births take the earliest label.
     """
     nb = int(sub.max()) + 1
     if nb <= 2:
@@ -230,23 +231,27 @@ def _merge_close_starts(sub, graph, hops):
     tt, ii = np.nonzero(sub)
     np.minimum.at(start, sub[tt, ii], tt)
     pairs = []
-    for t in np.unique(start[1:][start[1:] < T]):
-        born = np.flatnonzero(start == t)
-        born = born[born > 0]
-        if born.size < 2:
+    for b in range(1, nb):
+        tb = start[b]
+        if tb >= T:
             continue
-        cells = {int(b): np.flatnonzero(sub[t] == b) for b in born}
-        for b in born:
-            d = csgraph.dijkstra(graph.A_t[t], unweighted=True, indices=cells[int(b)], min_only=True, limit=hops)
-            for c in born:
-                if c > b and np.isfinite(d[cells[int(c)]]).any():
-                    pairs.append((int(b), int(c)))
+        earlier = [a for a in range(1, nb) if a != b and 0 <= tb - start[a] <= delta and (start[a], a) < (tb, b)]
+        if not earlier:
+            continue
+        limit = hops
+        d = csgraph.dijkstra(
+            graph.A_t[tb], unweighted=True, indices=np.flatnonzero(sub[tb] == b), min_only=True, limit=limit
+        )
+        for a in earlier:
+            units = np.flatnonzero(sub[start[a]] == a)  # A's origin: its units in the frame it started
+            if units.size and d[units].min() <= hops:
+                pairs.append((a, b))
     if not pairs:
         return sub
     a, b = np.array(pairs).T
     _, comp = csgraph.connected_components(sparse.coo_matrix((np.ones(a.size), (a, b)), shape=(nb, nb)), directed=False)
     first = {}
-    for lbl in range(nb):
+    for lbl in np.argsort(start, kind="stable"):
         first.setdefault(comp[lbl], lbl)
     lut = np.array([first[comp[x]] for x in range(nb)])
     lut[0] = 0
@@ -307,32 +312,28 @@ def _grow_from_origin(owner, is_big, nodes, graph, n):
     return owner
 
 
-def single_origin(lab, graph):
-    """Final check that every event grows from one origin.
+def single_origin(lab, graph, validated):
+    """Final check that every event grows from its origin.
 
-    The origin is the largest connected piece of the event's first frame; every other unit-frame stays only if
-    the event's body has reached it (_grow_from_origin). Needed after the membership refinements, which can
-    move a member's start to before the front reached it.
+    Members validated by the births step (validated > 0) stay; a unit-frame added afterwards (the membership
+    refinements can move a member's start to before the front reached it) stays only if the event's body has
+    reached it (_grow_from_origin).
     """
     T, n = lab.shape
     out = lab.copy()
     o = out.ravel()
+    v = validated.ravel()
     for e in np.unique(lab[lab > 0]):
         nodes = np.flatnonzero(lab.ravel() == e)
-        t0 = int(nodes[0] // n)  # nodes are sorted by frame
-        first = nodes[nodes // n == t0] % n
-        _, cc = csgraph.connected_components(_near(graph, t0)[first][:, first], directed=False)
-        origin = set((t0 * n + first[cc == np.argmax(np.bincount(cc))]).tolist())
-        is_origin = np.array([x in origin for x in nodes.tolist()])
-        o[nodes] = _grow_from_origin(np.full(nodes.size, int(e)), is_origin, nodes, graph, n)
+        o[nodes] = _grow_from_origin(np.full(nodes.size, int(e)), v[nodes] > 0, nodes, graph, n)
     return out
 
 
-def separate_births(lab, graph, eu, ev, seedable, min_cells):
+def separate_births(lab, graph, eu, ev, seedable, min_cells, delta):
     """Give every event a single origin.
 
     Inside each event, units are tracked frame by frame (ARCOS-style) and every separate start is a birth from
-    the frame it appears (patches appearing together within the tracker's link distance are one start). A birth
+    the frame it appears (starts close together in space and time are one origin, _merge_close_starts). A birth
     that in some frame holds >= min_cells co-active units (more than chance produces) is an event of its own;
     if none does, the birth with the most co-active units is the event's origin.
     Smaller births and the remaining members join the nearest large birth they connect to (in space-time,
@@ -348,7 +349,7 @@ def separate_births(lab, graph, eu, ev, seedable, min_cells):
         sub = np.where(mask, _track_seeded(graph, mask, seedable & mask, 1), 0)
         if sub.max() == 0:
             continue
-        sub = _merge_close_starts(sub, graph, 2 * LINK_K + 1)
+        sub = _merge_close_starts(sub, graph, 2 * LINK_K + 2, delta)
         peak = _birth_peak_seeds(sub, seedable)
         peak[0] = -1
         big = np.flatnonzero(peak >= min_cells)
@@ -861,7 +862,8 @@ def detect_matrix(
     eu, ev = spacetime_edges(graph, observed)
     null_L = [Ln for _, Ln in (mv.nulls if mv.nulls else calibration.own_null(mv.D, observed, graph, mv.cap, mv.rng))]
     seed_size = _null_seed_size(graph, null_L, observed, h, epsilon)
-    lab = separate_births(lab, graph, eu, ev, observed & (mv.L > h), seed_size)
+    lab = separate_births(lab, graph, eu, ev, observed & (mv.L > h), seed_size, delta)
+    validated = lab.copy()
     lineage = None
     if allow_merges:
         lab, lineage = apply_merges(lab, event_contacts(lab, group, eu, ev, n))
@@ -870,7 +872,7 @@ def detect_matrix(
     prune_k = _prune_window(mv, lvl, q, delta) if prune_early else None
     if prune_k is not None:
         lab = prune_early_members(lab, graph, prune_k)
-    lab = single_origin(lab, graph)
+    lab = single_origin(lab, graph, validated)
     u = np.unique(lab)
     lab = _relabel(lab)
     report.level_quantile, report.level, report.onset_window, report.core = q, h, delta, m

@@ -407,7 +407,7 @@ def test_simultaneous_origins_are_separate_events():
 
 
 def test_every_event_has_a_single_origin(sheet):
-    from arcos4py.tools._coactivation import _near
+    from arcos4py.tools._coactivation import LINK_K
 
     df, _ = sheet
     S, observed, pos_t, rows = _to_matrix(df, POS, "t", "id", "m")
@@ -416,8 +416,8 @@ def test_every_event_has_a_single_origin(sheet):
     for e in range(1, lab.max() + 1):
         t0 = np.flatnonzero((lab == e).any(1))[0]
         first = np.flatnonzero(lab[t0] == e)
-        k, _ = csgraph.connected_components(_near(g, t0)[first][:, first], directed=False)
-        assert k == 1  # the event appears as one piece
+        d = csgraph.dijkstra(g.A_t[t0], unweighted=True, indices=first[:1], min_only=True)
+        assert d[first].max() <= 2 * (2 * LINK_K + 2)  # the event appears around one point
 
 
 def test_single_origin_drops_parts_before_contact():
@@ -431,6 +431,8 @@ def test_single_origin_drops_parts_before_contact():
     lab[1, 9:] = 1  # a separate patch far away, before the front reaches it
     lab[2, :6] = lab[2, 9:] = 1  # still separate
     lab[3, :] = 1  # the front reaches it
-    out = single_origin(lab, g)
+    validated = np.zeros_like(lab)
+    validated[0, 0] = validated[1, :2] = validated[2, :6] = 1  # what the births step kept
+    out = single_origin(lab, g, validated)
     assert (out[1, 9:] == 0).all() and (out[2, 9:] == 0).all()
     assert (out[3] == 1).all() and (out[1, :2] == 1).all()
